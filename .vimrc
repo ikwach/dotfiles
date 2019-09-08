@@ -57,6 +57,7 @@ filetype plugin indent on    " required
 " Put your non-Plugin stuff after this line
 
 """ here are SETs
+let g:airline_theme='solarized_flood'
 syntax enable
 set number
 set background=dark
