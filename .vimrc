@@ -15,28 +15,28 @@ Plugin 'tpope/vim-fugitive'
 Plugin 'git://git.wincent.com/command-t.git'
 Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
 
-Plugin 'joshdick/onedark.vim'   		"theme
+Plugin 'joshdick/onedark.vim'   		        "theme
 Plugin 'altercation/vim-colors-solarized'  	"theme
-Plugin 'jpo/vim-railscasts-theme'		"theme
-Plugin 'lifepillar/vim-solarized8'		"theme
+Plugin 'jpo/vim-railscasts-theme'		        "theme
+Plugin 'lifepillar/vim-solarized8'		      "theme
 Plugin 'nathanaelkane/vim-indent-guides'
 Plugin 'sjl/gundo.vim'
 Plugin 'gorodinskiy/vim-coloresque'
-Plugin 'dracula/vim' 				"theme
+Plugin 'dracula/vim' 				                "theme
 Plugin 'Chiel92/vim-autoformat'
-Plugin 'sheerun/vim-polyglot'			"all langs in one - can be a reason for problems
-Plugin 'sheerun/vim-wombat-scheme'		"theme
+Plugin 'sheerun/vim-polyglot'			          "all langs in one - can be a reason for problems
+Plugin 'sheerun/vim-wombat-scheme'		      "theme
 Plugin 'vim-airline/vim-airline'
 Plugin 'vim-airline/vim-airline-themes'
 Plugin 'airblade/vim-gitgutter'
 Plugin 'scrooloose/nerdtree'
 Plugin 'xuyuanp/nerdtree-git-plugin'
 Plugin 'bronson/vim-trailing-whitespace'	"can cause problems
-Plugin 'w0rp/ale'				"ASYNCHRONOUS LINT ENGINE
-"Plugin 'scrooloose/syntastic'			" also error checcker to try
+Plugin 'w0rp/ale'				                  "ASYNCHRONOUS LINT ENGINE
+"Plugin 'scrooloose/syntastic'			      " also error checcker to try
 Plugin 'junegunn/fzf'
-Plugin 'mattn/emmet-vim'			" Type the abbreviation as 'div>p#foo$*3>a' and type '<c-y>,'
-"Plugin 'valloric/youcompleteme'			" visual autocomplete - canmake conflict
+Plugin 'mattn/emmet-vim'			            " Type the abbreviation as 'div>p#foo$*3>a' and type '<c-y>,'
+"Plugin 'valloric/youcompleteme'			    " visual autocomplete - canmake conflict
 
 
 
