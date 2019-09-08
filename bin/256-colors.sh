@@ -1,0 +1,1 @@
+/Users/ikwach/.dotfiles/bin/256-colors.sh
