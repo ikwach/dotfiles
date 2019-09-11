@@ -36,10 +36,13 @@ Plugin 'w0rp/ale'				                  "ASYNCHRONOUS LINT ENGINE
 "Plugin 'scrooloose/syntastic'			      " also error checcker to try
 Plugin 'junegunn/fzf'
 Plugin 'mattn/emmet-vim'			            " Type the abbreviation as 'div>p#foo$*3>a' and type '<c-y>,'
-"Plugin 'valloric/youcompleteme'			    " visual autocomplete - canmake conflict
+"Plugin 'valloric/youcompleteme'			    " visual autocomplete - canmake
+"the engine.
+Plugin 'SirVer/ultisnips'
 
-
-
+" Snippets are separated from the engine. Add this if you want them:
+Plugin 'honza/vim-snippets'
+Plugin 'scrooloose/nerdcommenter'
 
 " All of your Plugins must be added before the following line
 call vundle#end()            " required
@@ -55,6 +58,17 @@ filetype plugin indent on    " required
 "
 " see :h vundle for more details or wiki for FAQ
 " Put your non-Plugin stuff after this line
+
+" " Trigger configuration. Do not use <tab> if you use
+" https://github.com/Valloric/YouCompleteMe.
+let g:UltiSnipsExpandTrigger="<tab>"
+let g:UltiSnipsJumpForwardTrigger="<c-b>"
+let g:UltiSnipsJumpBackwardTrigger="<c-z>"
+
+" If you want :UltiSnipsEdit to split your window.
+let g:UltiSnipsEditSplit="vertical"
+
+
 
 """ here are SETs
 let g:airline_theme='solarized_flood'
