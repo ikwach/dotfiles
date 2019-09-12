@@ -15,6 +15,7 @@ Plugin 'tpope/vim-fugitive'
 Plugin 'git://git.wincent.com/command-t.git'
 Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
 
+Plugin 'sonph/onehalf'                      "theme
 Plugin 'joshdick/onedark.vim'   		        "theme
 Plugin 'altercation/vim-colors-solarized'  	"theme
 Plugin 'jpo/vim-railscasts-theme'		        "theme
@@ -32,9 +33,10 @@ Plugin 'airblade/vim-gitgutter'
 Plugin 'scrooloose/nerdtree'
 Plugin 'xuyuanp/nerdtree-git-plugin'
 Plugin 'bronson/vim-trailing-whitespace'	"can cause problems
-Plugin 'w0rp/ale'				                  "ASYNCHRONOUS LINT ENGINE
+"Plugin 'w0rp/ale'				                  "ASYNCHRONOUS LINT ENGINE
 "Plugin 'scrooloose/syntastic'			      " also error checcker to try
 Plugin 'junegunn/fzf'
+Plugin 'prettier/vim-prettier'
 Plugin 'mattn/emmet-vim'			            " Type the abbreviation as 'div>p#foo$*3>a' and type '<c-y>,'
 "Plugin 'valloric/youcompleteme'			    " visual autocomplete - canmake
 "the engine.
@@ -68,15 +70,48 @@ let g:UltiSnipsJumpBackwardTrigger="<c-z>"
 " If you want :UltiSnipsEdit to split your window.
 let g:UltiSnipsEditSplit="vertical"
 
+"Prettier
+let g:prettier#autoformat = 0
+autocmd BufWritePre *.js,*.jsx,*.mjs,*.ts,*.tsx,*.css,*.less,*.scss,*.json,*.graphql,*.md,*.vue,*.yaml,*.html PrettierAsync
 
+" LINTERS
+"let g:ale_linters = {
+      "\  'javascript': ['eslint'],
+      "\  'jsx': ['eslint']
+      "\}
+"let g:ale_fixers = {
+      "\  'javascript': ['eslint'],
+      "\  'jsx': ['eslint']
+      "\}
+"let g:ale_sign_column_always = 1
+"let g:ale_sign_error = '✘'
+"let g:ale_sign_warning = '⚠'
+"highlight ALEErrorSign ctermbg=NONE ctermfg=red
+"highlight ALEWarningSign ctermbg=NONE ctermfg=yellow
 
 """ here are SETs
-let g:airline_theme='solarized_flood'
+let g:gitgutter_max_signs = 900
+highlight GitGutterAdd    guifg=#009900 guibg=#073642 ctermfg=2 ctermbg=0
+highlight GitGutterChange guifg=#bbbb00 guibg=#073642 ctermfg=3 ctermbg=0
+highlight GitGutterDelete guifg=#ff2222 guibg=#073642 ctermfg=1 ctermbg=0
+let g:gitgutter_sign_added = '●'
+let g:gitgutter_sign_modified = '●'
+let g:gitgutter_sign_removed = '●'
+let g:gitgutter_sign_modified_removed = '●'
+"let g:airline_theme='solarized_flood'
+let g:airline_theme='onedark'
 syntax enable
 set number
 set background=dark
 let g:solarized_termcolors=256
-colorscheme railscasts
+colorscheme onedark
+if exists('+termguicolors')
+  let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
+  let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
+  set termguicolors
+endif
+
+
 set ts=4 sw=4
 " Disable strange Vi defaults.
 set nocompatible
