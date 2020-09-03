@@ -1,15 +1,38 @@
 # dotfiles
 Set of my dotfiles and recipes
 
-Own coding skills
+Python first:
 
+brew install pyenv
+pyenv install 3.8.5 -- LATEST PLZ
+pyenv global 3.8.5 -- LATEST PLZ
+pyenv version
 
-brew install zsh
-brew install tmux
-brew install autojump
-brew install FZF
+echo -e 'if command -v pyenv 1>/dev/null 2>&1; then\n  eval "$(pyenv init -)"\nfi' >> ~/.zshrc
+After that command, our dotfile (.zshrc for zsh or .bash_profile for Bash) should look include these lines:
+
+if command -v pyenv 1>/dev/null 2>&1; then
+  eval "$(pyenv init -)"
+fi
+
+Check:
+which python
+python -V
+pip -V
+
+=========================
+
+/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+
+brew install tmux autojump FZF python vim
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
+git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
+
+echo "Now copy .vimrc , open it and type"
+echo ":source %"
+echo ":PluginInstall"
+
 
 Add plugins to your shell by adding the name of the plugin to the plugin array in your .zshrc.
 plugins=(git colored-man colorize pip python brew osx zsh-syntax-highlighting)
@@ -18,9 +41,6 @@ You'll find a list of all plugins on the Oh My Zsh Wiki. Note that adding plugi
 Themes
 Changing theme is as simple as changing a string in your configuration file. The default theme is robbyrussell. Just change that value to change theme, and don't forget to apply your changes.
 ZSH_THEME=pygmalion
-
-
-git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
 
 
 git clone https://github.com/romkatv/powerlevel10k.git $ZSH_CUSTOM/themes/powerlevel10k
