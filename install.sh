@@ -1,13 +1,10 @@
 #!/bin/sh
 
-echo "fom macos"
+echo "for macos"
 
 /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 
-brew install zsh
-brew install tmux
-brew install autojump
-brew install FZF
+brew install tmux autojump FZF
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
 git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
