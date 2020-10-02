@@ -1,6 +1,7 @@
 # Set of my dotfiles and recipes for MAC OS
 
-> Please be careful. Issue this commands and install this software only if you fully understand what you are doing. You can accidently brake your prodution enviroment (for example by replacing python version or by overwriting your $PATH)
+> Please be careful. Issue this commands and install this software only if you fully understand what you are doing. You can accidently brake your prodution enviroment (for example by replacing python version or by overwriting your $PATH).
+> **Make a copy of your home directory "." (dot) config files, for example .zshrc or .vimrc etc.**
 
 ## Prerequisites 
 1. [Homebrew](https://brew.sh/)
@@ -21,7 +22,8 @@
 
 **Packages through Brew**     
         
-    brew install autojump FZF vim wget git zsh tmux zsh-autosuggestions zsh-syntax-highlighting
+    brew install zsh
+    brew install autojump FZF vim wget git tmux zsh-autosuggestions zsh-syntax-highlighting
 
 **Vundle package manager for vim**
     
@@ -31,7 +33,7 @@
     
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
         
-**powerlevel10k theme for OhMyZsh**
+**[powerlevel10k](https://github.com/romkatv/powerlevel10k) theme for OhMyZsh**
 
     git clone https://github.com/romkatv/powerlevel10k.git ~/.oh-my-zsh/custom/themes/powerlevel10k
 
