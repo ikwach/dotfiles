@@ -1,6 +1,16 @@
-# dotfiles
-Set of my dotfiles and recipes
+# Set of my dotfiles and recipes for MAC OS
 
+> Please be careful. Issue this commands and install this software only if you fully understand what you are doing. You can accidently brake your prodution enviroment (for example by replacing python version or by overwriting your $PATH)
+
+## Prerequisites 
+1. curl
+1. wget
+1. git
+1. [Homebrew](https://brew.sh/)
+1. Full version of vim (not default one)
+1. zsh
+
+## Installation
 Python first:
 
 brew install pyenv
@@ -25,8 +35,6 @@ pip -V
 
 
 =========================
-
-/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 
 brew install tmux autojump FZF python vim
 
