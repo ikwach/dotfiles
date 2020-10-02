@@ -1,6 +1,7 @@
 # Set of my dotfiles and recipes for MAC OS
 
 > Please be careful. Issue this commands and install this software only if you fully understand what you are doing. You can accidently brake your prodution enviroment (for example by replacing python version or by overwriting your $PATH).
+
 > **Make a copy of your home directory "." (dot) config files, for example .zshrc or .vimrc etc.**
 
 ## Prerequisites 
