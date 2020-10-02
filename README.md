@@ -8,7 +8,6 @@
 
 
 ## Installation
-brew install tmux autojump FZF vim wget git zsh zsh-autosuggestions zsh-syntax-highlighting
 
 **Python first:**
 (currently lastest supported version by pyenv is 3.8.5, but you better check it)
@@ -18,24 +17,26 @@ brew install tmux autojump FZF vim wget git zsh zsh-autosuggestions zsh-syntax-h
     pyenv global 3.8.5
     pyenv version
 
-Check:
+Note: pyenv will be enabled later by command in your .zshrc , so do not try to check python version now.
 
-    which python
-    python -V
-    pip -V
+**Main install**
+Vundle package manager for vim
+
+        git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
+
+Packages through Brew        
+        
+        brew install tmux autojump FZF vim wget git zsh zsh-autosuggestions zsh-syntax-highlighting
+        
+OhMyZsh
+
+        sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
+        
+powerlevel10k theme for OhMyZsh
+
+        git clone https://github.com/romkatv/powerlevel10k.git ~/.oh-my-zsh/custom/themes/powerlevel10k
 
 
-=========================
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
-git clone https://github.com/romkatv/powerlevel10k.git ~/.oh-my-zsh/custom/themes/powerlevel10k
-
-
-======
-
-
-
-
-git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
 
 echo "Now copy .vimrc , open it and type"
 echo ":source %"
