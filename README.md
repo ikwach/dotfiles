@@ -10,27 +10,19 @@
 ## Installation
 brew install tmux autojump FZF vim wget git zsh zsh-autosuggestions zsh-syntax-highlighting
 
-Python first:
+**Python first:**
+(currently lastest supported version by pyenv is 3.8.5, but you better check it)
 
-brew install pyenv
-pyenv install 3.8.5 -- LATEST PLZ
-pyenv global 3.8.5 -- LATEST PLZ
-pyenv version
-
-echo -e 'if command -v pyenv 1>/dev/null 2>&1; then\n  eval "$(pyenv init -)"\nfi' >> ~/.zshrc
-After that command, our dotfile (.zshrc for zsh or .bash_profile for Bash) should look include these lines:
-
-if command -v pyenv 1>/dev/null 2>&1; then
-  eval "$(pyenv init -)"
-fi
+    brew install pyenv
+    pyenv install 3.8.5
+    pyenv global 3.8.5
+    pyenv version
 
 Check:
 
-which python
-
-python -V
-
-pip -V
+    which python
+    python -V
+    pip -V
 
 
 =========================
