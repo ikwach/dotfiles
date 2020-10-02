@@ -41,7 +41,7 @@ Open iTerm and use it from now on ;)
     git clone https://github.com/romkatv/powerlevel10k.git ~/.oh-my-zsh/custom/themes/powerlevel10k
 
 
-**Now get and then copy .dotfiles (this will overwrite your current files, so be careful**
+**Now get and then copy .dotfiles (this will overwrite your current files, so be careful)**
 
     git clone https://github.com/ikwach/dotfiles.git
     cp dotfiles/.vimrc ~/
@@ -70,6 +70,7 @@ After all done, just close vim with standart **:q**'s
     ~/.fzf/install
 
 **Final step**
+
 Now finally close all iTerm windows and start a new one. This should trigger powerlevel10k setup.
 If not maybe you are still using bash instead of zsh shell, so try typing **zsh**
 You can always restart powerlevel10k setup by typing **p10k configure**
