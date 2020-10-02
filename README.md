@@ -17,24 +17,23 @@
     pyenv global 3.8.5
     pyenv version
 
-Note: pyenv will be enabled later by command in your .zshrc , so do not try to check python version now.
+*Note: pyenv will be enabled later by command in your .zshrc , so do not try to check python version now.*
 
-**Main install**
-Vundle package manager for vim
-
-        git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
-
-Packages through Brew        
+**Packages through Brew**     
         
-        brew install tmux autojump FZF vim wget git zsh zsh-autosuggestions zsh-syntax-highlighting
-        
-OhMyZsh
+    brew install autojump FZF vim wget git zsh tmux zsh-autosuggestions zsh-syntax-highlighting
 
-        sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
+**Vundle package manager for vim**
+    
+    git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
+      
+**OhMyZsh**
+    
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
         
-powerlevel10k theme for OhMyZsh
+**powerlevel10k theme for OhMyZsh**
 
-        git clone https://github.com/romkatv/powerlevel10k.git ~/.oh-my-zsh/custom/themes/powerlevel10k
+    git clone https://github.com/romkatv/powerlevel10k.git ~/.oh-my-zsh/custom/themes/powerlevel10k
 
 
 
@@ -42,15 +41,10 @@ echo "Now copy .vimrc , open it and type"
 echo ":source %"
 echo ":PluginInstall"
 
-echo "Now copy .vimrc , open it and type"
-echo ":source %"
-echo ":PluginInstall"
 
 
-git clone https://github.com/romkatv/powerlevel10k.git $ZSH_CUSTOM/themes/powerlevel10k
 
 git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
-
 ~/.fzf/install
 
 
