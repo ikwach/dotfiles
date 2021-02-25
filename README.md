@@ -14,7 +14,7 @@
 Open iTerm and use it from now on ;)
 
 **Python first:**
-(currently lastest supported version by pyenv is 3.8.5, but you better check it)
+(currently lastest supported version by pyenv is 3.8.5, but you better check it by 'pyenv install -l')
 
     brew install pyenv
     pyenv install 3.8.5
