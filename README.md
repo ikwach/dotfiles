@@ -24,6 +24,7 @@ Open iTerm and use it from now on ;)
 *Note: pyenv will be enabled later by command in your .zshrc , so do not try to check python version now.*
 
 **Xcode** 
+
     xcode-select --install
 
 **Packages through Brew**     
