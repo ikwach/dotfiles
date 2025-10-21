@@ -29,4 +29,9 @@ export PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH"
 #. "$HOME/.local/bin/env"
 
 alias osup="echo 'Updating Homebrew...'; brew update; echo 'Upgrading outdated packages...'; brew upgrade; echo 'Cleaning up...'; brew cleanup; echo 'Done!' ; echo 'Upgrading mac apps...'; mas upgrade; echo 'Done!'; echo 'Updating macos and restarting if needed...'; sudo softwareupdate -i --restart ; echo 'Done!'"
-export OPENAI_API_KEY="REDACTED_API_KEY"
+
+# API Keys and Secrets
+# IMPORTANT: Never commit API keys to git!
+# Store them in a separate file that's gitignored
+# Example: source ~/.secrets.env (add to .gitignore)
+# export OPENAI_API_KEY="your-key-here"

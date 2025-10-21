@@ -30,6 +30,10 @@ Temporary Items
 *.local
 *.secret
 .env
+.secrets
+.secrets.env
+*_secrets*
+*secret*
 
 # Backups
 *.bak
