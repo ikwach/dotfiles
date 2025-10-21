@@ -1,0 +1,14 @@
+# .zsh_plugins.txt
+# comments are supported like this
+zsh-users/zsh-completions
+# empty lines are skipped
+# annotations are also allowed:
+romkatv/zsh-bench kind:path
+olets/zsh-abbr kind:defer
+# frameworks like oh-my-zsh are supported
+ohmyzsh/ohmyzsh path:lib
+ohmyzsh/ohmyzsh path:plugins/colored-man-pages
+# popular fish-like plugins
+#mattmc3/zfunctions
+zsh-users/zsh-autosuggestions
+zdharma-continuum/fast-syntax-highlighting kind:defer
