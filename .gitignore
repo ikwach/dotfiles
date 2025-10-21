@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Thumbnails
+.Spotlight-V100
+.Trashes
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Vim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# ZSH
+.zcompdump*
+.zsh_sessions/
+
+# Personal files (don't commit sensitive data)
+*.local
+*.secret
+.env
+
+# Backups
+*.bak
+*.backup
+*~
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
