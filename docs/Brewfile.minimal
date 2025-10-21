@@ -1,0 +1,67 @@
+# Brewfile.minimal - Essential CLI tools only
+# No GUI applications
+#
+# Usage: brew bundle --file=docs/Brewfile.minimal
+
+# ========================================
+# Taps
+# ========================================
+
+tap "homebrew/bundle"
+tap "homebrew/core"
+
+# ========================================
+# Terminal & Shell
+# ========================================
+
+# ZSH plugin manager
+brew "antidote"
+
+# Powerlevel10k prompt theme
+brew "powerlevel10k"
+
+# FZF fuzzy finder
+brew "fzf"
+
+# ========================================
+# Modern CLI Tools
+# ========================================
+
+brew "bat"          # Better cat
+brew "eza"          # Better ls
+brew "ripgrep"      # Better grep
+brew "fd"           # Better find
+brew "zoxide"       # Smart cd
+brew "btop"         # Better top
+brew "tealdeer"     # Fast tldr
+brew "navi"         # Interactive cheatsheets
+brew "git-delta"    # Better git diff
+brew "lazygit"      # Git TUI
+brew "gdu"          # Disk usage analyzer
+brew "jq"           # JSON processor
+brew "yq"           # YAML processor
+brew "htop"         # Process viewer
+brew "tree"         # Directory tree
+
+# ========================================
+# Development Tools
+# ========================================
+
+brew "git"
+brew "neovim"
+brew "python3"
+brew "golang"
+brew "node"
+brew "nvm"
+brew "pyenv"
+brew "rbenv"
+
+# ========================================
+# Utilities
+# ========================================
+
+brew "wget"
+brew "curl"
+brew "tmux"
+brew "mas"
+brew "gh"

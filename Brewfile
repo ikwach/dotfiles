@@ -1,6 +1,16 @@
 # Brewfile - Homebrew Bundle
-# Install everything: brew bundle
 # Based on Mac Setup Guide (2025)
+#
+# Installation options:
+#   brew bundle                    # Install everything
+#   brew bundle --no-lock          # Install without creating Brewfile.lock
+#
+# Minimal install (CLI tools only):
+#   brew bundle --file=- <<EOF
+#   $(sed -n '/ESSENTIAL START/,/ESSENTIAL END/p' Brewfile)
+#   EOF
+#
+# To skip GUI apps, comment out the "Applications (Casks)" section
 
 # ========================================
 # Taps
@@ -10,6 +20,10 @@ tap "homebrew/bundle"
 tap "homebrew/cask"
 tap "homebrew/cask-fonts"
 tap "homebrew/core"
+
+# ========================================
+# ESSENTIAL START - Minimal CLI-only install
+# ========================================
 
 # ========================================
 # Terminal & Shell
@@ -114,38 +128,45 @@ brew "mas"
 brew "gh"
 
 # ========================================
-# Applications (Casks)
+# ESSENTIAL END - Everything above is CLI tools only
+# ========================================
+
+# ========================================
+# Applications (Casks) - OPTIONAL
+# Comment out this entire section if you don't want GUI apps
 # ========================================
 
 # Browsers
 cask "google-chrome"
 cask "firefox"
 
-# Security
+# Security & Password Management
 cask "1password"
 
-# Development
-cask "visual-studio-code"  # Optional
-cask "docker"
-cask "postman"
+# Development (comment out what you don't need)
+cask "visual-studio-code"  # Code editor (optional if using Neovim)
+cask "docker"              # Docker Desktop
+cask "postman"             # API testing
 
-# Communication
-cask "slack"
-cask "discord"
+# Communication (comment out what you don't need)
+cask "slack"               # Team communication
+cask "discord"             # Community chat
 
-# Utilities
-cask "rectangle"           # Window management
-cask "raycast"             # Launcher
+# Productivity Utilities
+cask "rectangle"           # Window management (free)
+cask "raycast"             # Spotlight replacement (free tier available)
+# cask "alfred"            # Alternative to Raycast (paid)
 
 # ========================================
-# Fonts
+# Fonts - REQUIRED for Powerlevel10k icons
 # ========================================
 
-# Nerd Fonts (choose what you need)
-cask "font-meslo-lg-nerd-font"
-cask "font-fira-code-nerd-font"
-cask "font-hack-nerd-font"
-cask "font-jetbrains-mono-nerd-font"
+# Nerd Fonts (required for terminal icons and Powerlevel10k)
+# At minimum, install one of these:
+cask "font-meslo-lg-nerd-font"       # Recommended by Powerlevel10k
+cask "font-fira-code-nerd-font"      # Popular coding font
+cask "font-hack-nerd-font"           # Clean monospace
+cask "font-jetbrains-mono-nerd-font" # JetBrains official font
 
 # ========================================
 # Mac App Store Apps

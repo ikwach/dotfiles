@@ -19,6 +19,16 @@
 
 ---
 
+## 🛤️ Choose Your Path
+
+**🚀 Fast Track (Automated):** One command to set up everything
+→ Continue reading below
+
+**🛠️ DIY Track (Manual):** Step-by-step guides to understand and customize
+→ See [docs/README.md](docs/README.md) for comprehensive manual setup guides
+
+---
+
 ## 📦 What's Included
 
 ### Shell & Terminal
@@ -70,18 +80,24 @@
 git clone https://github.com/ikwach/dotfiles.git ~/dotfiles
 cd ~/dotfiles
 
-# Run the installation script
+# Full installation (includes GUI apps)
 ./install.sh
+
+# OR: Minimal installation (CLI tools only, no GUI apps)
+brew bundle --file=docs/Brewfile.minimal
+# Then run the symlink portions manually (see Manual Installation below)
 ```
 
 The installer will:
 1. ✅ Install Homebrew (if needed)
-2. ✅ Install all packages from Brewfile
+2. ✅ Install all packages from Brewfile (or minimal set if specified)
 3. ✅ Backup your existing dotfiles
 4. ✅ Create symlinks to new dotfiles
 5. ✅ Install ZSH plugins
 6. ✅ Set up tmux plugin manager
 7. ✅ Configure tealdeer
+
+**Note:** The default Brewfile includes GUI applications (VS Code, Docker, Chrome, etc.). If you prefer CLI tools only, use `docs/Brewfile.minimal` or comment out the "Applications (Casks)" section in the main Brewfile.
 
 ### Post-Installation
 
