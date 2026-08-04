@@ -90,6 +90,10 @@ format = '[[($all_status$ahead_behind )](fg:crust bg:yellow)]($style)'
 symbol = ""
 style = "bg:green"
 format = '[[ $symbol( $version) ](fg:crust bg:green)]($style)'
+# only show the node version where an explicit .nvmrc pins it
+detect_files = [".nvmrc"]
+detect_extensions = []
+detect_folders = []
 
 [bun]
 symbol = ""
