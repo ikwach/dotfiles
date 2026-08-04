@@ -1,6 +1,6 @@
 # dotfiles
 
-macOS development environment - starship + catppuccin mocha, modern CLI tools, one-command install with two modes.
+Development environment for macOS and Linux (Debian/Ubuntu) - starship + catppuccin mocha, modern CLI tools, one-command install with two modes.
 
 ## Install
 
@@ -29,10 +29,15 @@ The installer is idempotent - rerun it any time. Existing configs are backed up 
 
 Corporate mode also prompts for your **work** git email, and nothing personal is baked into the repo - identity, secrets, and machine-specific config all live in local files (see below).
 
+### Linux
+
+Packages come from [Homebrew on Linux](https://docs.brew.sh/Homebrew-on-Linux) on both OSes, so there is one manifest with identical tool versions and no `batcat`/`fdfind` renames. apt is only used to bootstrap Homebrew's build dependencies. Casks (iTerm2, the GUI apps in personal mode) are macOS-only and get skipped; JetBrains Mono Nerd Font is installed from the nerd-fonts release into `~/.local/share/fonts` instead. For the stock GNOME Terminal, set that font in your profile and use [catppuccin/gnome-terminal](https://github.com/catppuccin/gnome-terminal) for the colors. The `install` CI workflow runs corporate mode on both Ubuntu and macOS on every PR.
+
 ## What's where
 
 ```
-Brewfile.core        # packages for both modes
+Brewfile.core        # cross-platform packages for both modes
+Brewfile.macos       # macOS-only: iTerm2, nerd font cask, mas
 Brewfile.personal    # extras for personal mode
 install.sh           # installer (brew, symlinks, git identity, secrets, theme caches)
 zsh/                 # .zshrc + antidote plugin list
@@ -60,7 +65,7 @@ Ctrl+R        # fuzzy history search (atuin)
 Ctrl+T        # fuzzy file picker (fzf)
 ll / la / lt  # eza listings (long / all / tree)
 lg            # lazygit
-osup          # update brew + App Store + macOS
+osup          # update everything (brew, plus App Store/OS on macOS, apt on Linux)
 mise use -g node@lts  # runtime versions (replaces nvm/pyenv/rbenv)
 ```
 

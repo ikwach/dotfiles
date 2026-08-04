@@ -1,5 +1,6 @@
-# Brewfile.core - installed in BOTH personal and corporate modes.
-# Composed by install.sh:  cat Brewfile.core [Brewfile.personal] | brew bundle --file=-
+# Brewfile.core - installed in BOTH personal and corporate modes, on macOS and Linux.
+# Cross-platform formulae only; macOS-only entries live in Brewfile.macos.
+# Composed by install.sh: cat Brewfile.core [Brewfile.macos] [Brewfile.personal] | brew bundle --file=-
 
 # --- Shell & prompt ---
 brew "antidote"       # zsh plugin manager
@@ -28,9 +29,3 @@ brew "neovim"
 brew "mise"           # polyglot version manager (replaces nvm/pyenv/rbenv)
 brew "tmux"
 
-# --- macOS ---
-brew "mas"            # Mac App Store CLI
-
-# --- Terminal & font ---
-cask "iterm2"
-cask "font-jetbrains-mono-nerd-font"  # required for prompt icons

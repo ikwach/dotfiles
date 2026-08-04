@@ -2,6 +2,12 @@
 # Environment
 # ========================================
 
+# Homebrew on Linux: most Linux terminals start non-login shells, which
+# skip ~/.zprofile, so put brew on PATH here as well
+if [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
 export XDG_CONFIG_HOME="$HOME/.config"
 export EZA_CONFIG_DIR="$XDG_CONFIG_HOME/eza"
 export BAT_THEME="Catppuccin Mocha"
@@ -79,8 +85,12 @@ fi
 
 command -v lazygit >/dev/null && alias lg="lazygit"
 
-# Update everything: Homebrew, App Store apps, macOS
-alias osup="brew update && brew upgrade && brew cleanup && mas upgrade && sudo softwareupdate -i --restart"
+# Update everything: Homebrew, plus App Store apps and the OS itself on macOS
+if [[ "$OSTYPE" == darwin* ]]; then
+  alias osup="brew update && brew upgrade && brew cleanup && mas upgrade && sudo softwareupdate -i --restart"
+else
+  alias osup="brew update && brew upgrade && brew cleanup && sudo apt-get update && sudo apt-get upgrade -y"
+fi
 
 # ========================================
 # Machine-specific paths (loaded only if present)

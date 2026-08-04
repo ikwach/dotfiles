@@ -1,4 +1,6 @@
 # Brewfile.personal - extras installed ONLY in personal mode.
+# On Linux the cask lines are skipped (see install.sh); install those
+# apps through their vendor instructions instead.
 
 # --- AI tooling ---
 cask "claude-code"    # Claude Code CLI

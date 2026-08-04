@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 #
-# Dotfiles installer
+# Dotfiles installer for macOS and Linux (Debian/Ubuntu)
 #
 # Usage:
 #   ./install.sh personal    # full setup: core + AI, cloud, media tools
 #   ./install.sh corporate   # restricted setup: core CLI tools only
+#
+# Packages come from Homebrew on both OSes (one manifest, same versions).
+# On Linux, apt only bootstraps Homebrew's build deps; casks and mas are
+# macOS-only and live in Brewfile.macos.
 #
 set -euo pipefail
 
@@ -16,6 +20,12 @@ info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
 warning() { echo -e "${YELLOW}[!]${NC} $1"; }
 fail()    { echo -e "${RED}[ERR]${NC} $1"; exit 1; }
+
+case "$OSTYPE" in
+  darwin*) OS="macos" ;;
+  linux*)  OS="linux" ;;
+  *)       fail "Unsupported OS: $OSTYPE" ;;
+esac
 
 # ----------------------------------------
 # Mode selection
@@ -39,10 +49,8 @@ if [[ -z "$MODE" ]]; then
 fi
 [[ "$MODE" == "personal" || "$MODE" == "corporate" ]] || fail "Unknown mode: $MODE (use personal|corporate)"
 
-[[ "$OSTYPE" == darwin* ]] || fail "This script only supports macOS"
-
 echo ""
-info "Mode: $MODE"
+info "Mode: $MODE ($OS)"
 info "Dotfiles: $DOTFILES_DIR"
 echo ""
 
@@ -51,24 +59,45 @@ echo ""
 # ----------------------------------------
 
 if ! command -v brew >/dev/null 2>&1; then
+  if [[ "$OS" == "linux" ]] && command -v apt-get >/dev/null 2>&1; then
+    info "Installing Homebrew build dependencies via apt..."
+    if ! (sudo apt-get update -qq && sudo apt-get install -y -qq \
+        build-essential procps curl file git zsh fontconfig); then
+      warning "apt dependencies failed; Homebrew install may not work"
+    fi
+  fi
   info "Installing Homebrew..."
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  if [[ "$(uname -m)" == "arm64" ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
-    grep -q 'brew shellenv' "$HOME/.zprofile" 2>/dev/null || \
-      echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
-  fi
 fi
+
+# Make brew available in this script and in future login shells
+for brew_bin in /opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew /usr/local/bin/brew; do
+  if [[ -x "$brew_bin" ]]; then
+    eval "$("$brew_bin" shellenv)"
+    grep -q 'brew shellenv' "$HOME/.zprofile" 2>/dev/null || \
+      echo "eval \"\$($brew_bin shellenv)\"" >> "$HOME/.zprofile"
+    break
+  fi
+done
+command -v brew >/dev/null 2>&1 || fail "Homebrew is not available after install"
 success "Homebrew ready"
 
 # A single blocked package (e.g. a cask denied by MDM policy) should not
 # abort the whole install before symlinks and identity are set up.
+compose_brewfile() {
+  cat "$DOTFILES_DIR/Brewfile.core"
+  [[ "$OS" == "macos" ]] && cat "$DOTFILES_DIR/Brewfile.macos"
+  [[ "$MODE" == "personal" ]] && cat "$DOTFILES_DIR/Brewfile.personal"
+  return 0
+}
+
 info "Installing packages (this can take a while)..."
-if [[ "$MODE" == "personal" ]]; then
-  cat "$DOTFILES_DIR/Brewfile.core" "$DOTFILES_DIR/Brewfile.personal" | brew bundle --file=- \
+if [[ "$OS" == "linux" ]]; then
+  # Casks are a macOS concept; drop any that appear in Brewfile.personal
+  compose_brewfile | grep -v '^cask ' | brew bundle --file=- \
     || warning "Some packages failed to install; continuing with setup"
 else
-  brew bundle --file="$DOTFILES_DIR/Brewfile.core" \
+  compose_brewfile | brew bundle --file=- \
     || warning "Some packages failed to install; continuing with setup"
 fi
 success "Package installation finished"
@@ -92,6 +121,12 @@ link() {
   success "Linked $target"
 }
 
+if [[ "$OS" == "macos" ]]; then
+  TEALDEER_CONFIG="$HOME/Library/Application Support/tealdeer/config.toml"
+else
+  TEALDEER_CONFIG="$HOME/.config/tealdeer/config.toml"
+fi
+
 info "Linking dotfiles..."
 link "$DOTFILES_DIR/zsh/.zshrc"                          "$HOME/.zshrc"
 link "$DOTFILES_DIR/zsh/.zsh_plugins.txt"                "$HOME/.zsh_plugins.txt"
@@ -105,7 +140,7 @@ link "$DOTFILES_DIR/themes/bat/Catppuccin Mocha.tmTheme" "$HOME/.config/bat/them
 link "$DOTFILES_DIR/themes/eza/catppuccin-mocha.yml"     "$HOME/.config/eza/theme.yml"
 link "$DOTFILES_DIR/themes/btop/catppuccin_mocha.theme"  "$HOME/.config/btop/themes/catppuccin_mocha.theme"
 link "$DOTFILES_DIR/lazygit/config.yml"                  "$HOME/.config/lazygit/config.yml"
-link "$DOTFILES_DIR/tealdeer/config.toml"                "$HOME/Library/Application Support/tealdeer/config.toml"
+link "$DOTFILES_DIR/tealdeer/config.toml"                "$TEALDEER_CONFIG"
 
 # bin/ scripts onto PATH (gifenc needs ffmpeg, which only personal mode installs)
 mkdir -p "$HOME/.local/bin"
@@ -122,6 +157,28 @@ if [[ -f "$HOME/.gitignore_global" ]]; then
 fi
 
 [[ -d "$BACKUP_DIR" ]] && info "Previous configs backed up to $BACKUP_DIR"
+
+# ----------------------------------------
+# Nerd Font (Linux; macOS gets it as a cask)
+# ----------------------------------------
+
+if [[ "$OS" == "linux" ]] && command -v fc-cache >/dev/null 2>&1; then
+  FONT_DIR="$HOME/.local/share/fonts/JetBrainsMonoNerdFont"
+  if [[ ! -d "$FONT_DIR" ]]; then
+    info "Installing JetBrains Mono Nerd Font..."
+    font_tmp="$(mktemp -d)"
+    if curl -fsSL -o "$font_tmp/JetBrainsMono.tar.xz" \
+        "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz" \
+        && mkdir -p "$FONT_DIR" \
+        && tar -xJf "$font_tmp/JetBrainsMono.tar.xz" -C "$FONT_DIR"; then
+      fc-cache -f "$FONT_DIR" >/dev/null || true
+      success "Nerd Font installed (set it in your terminal profile)"
+    else
+      warning "Font download failed; install a Nerd Font manually for prompt icons"
+    fi
+    rm -rf "$font_tmp"
+  fi
+fi
 
 # ----------------------------------------
 # Git identity (kept out of the repo)
@@ -164,11 +221,14 @@ success "Secrets file ready (~/.secrets.env, chmod 600)"
 # Tool setup
 # ----------------------------------------
 
-info "Building bat theme cache..."
-bat cache --build >/dev/null && success "bat themes ready"
+if command -v bat >/dev/null 2>&1; then
+  info "Building bat theme cache..."
+  bat cache --build >/dev/null && success "bat themes ready"
+fi
 
 # btop rewrites its config on exit, so copy a default instead of symlinking
 if [[ ! -f "$HOME/.config/btop/btop.conf" ]]; then
+  mkdir -p "$HOME/.config/btop"
   printf 'color_theme = "catppuccin_mocha"\ntheme_background = False\nvim_keys = True\n' > "$HOME/.config/btop/btop.conf"
   success "btop config created"
 fi
@@ -179,10 +239,12 @@ if [[ ! -d "$HOME/.tmux/plugins/tpm" ]]; then
   success "TPM installed (prefix + I inside tmux installs plugins)"
 fi
 
-info "Updating tldr cache..."
-tldr --update >/dev/null 2>&1 && success "tldr cache updated"
+if command -v tldr >/dev/null 2>&1; then
+  info "Updating tldr cache..."
+  tldr --update >/dev/null 2>&1 && success "tldr cache updated"
+fi
 
-if [[ "$SHELL" != *zsh ]]; then
+if [[ "$SHELL" != *zsh ]] && command -v zsh >/dev/null 2>&1; then
   info "Setting zsh as default shell..."
   chsh -s "$(command -v zsh)" || warning "Could not change the default shell; run chsh manually"
 fi
@@ -196,9 +258,14 @@ success "Installation complete ($MODE mode)."
 echo ""
 info "Next steps:"
 echo "  1. Restart your terminal"
-echo "  2. iTerm2 theme: Settings > Profiles > Colors > Color Presets > Import"
-echo "     -> $DOTFILES_DIR/themes/iterm/catppuccin-mocha.itermcolors"
-echo "     then Settings > Profiles > Text > Font -> JetBrainsMono Nerd Font"
+if [[ "$OS" == "macos" ]]; then
+  echo "  2. iTerm2 theme: Settings > Profiles > Colors > Color Presets > Import"
+  echo "     -> $DOTFILES_DIR/themes/iterm/catppuccin-mocha.itermcolors"
+  echo "     then Settings > Profiles > Text > Font -> JetBrainsMono Nerd Font"
+else
+  echo "  2. Set your terminal font to JetBrainsMono Nerd Font"
+  echo "     (GNOME Terminal catppuccin: github.com/catppuccin/gnome-terminal)"
+fi
 echo "  3. Runtime versions:    mise use -g node@lts"
 echo "  4. Import history:      atuin import zsh"
 if [[ "$MODE" == "personal" ]]; then
