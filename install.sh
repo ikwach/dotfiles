@@ -227,10 +227,11 @@ if command -v bat >/dev/null 2>&1; then
   bat cache --build >/dev/null && success "bat themes ready"
 fi
 
-# btop rewrites its config on exit, so copy a default instead of symlinking
+# btop rewrites its config on exit, so copy a default instead of symlinking.
+# dracula ships with btop; the vendored catppuccin theme stays available too.
 if [[ ! -f "$HOME/.config/btop/btop.conf" ]]; then
   mkdir -p "$HOME/.config/btop"
-  printf 'color_theme = "catppuccin_mocha"\ntheme_background = False\nvim_keys = True\n' > "$HOME/.config/btop/btop.conf"
+  printf 'color_theme = "dracula"\ntheme_background = False\nvim_keys = True\n' > "$HOME/.config/btop/btop.conf"
   success "btop config created"
 fi
 
