@@ -1,16 +1,14 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
-# Catppuccin Mocha powerline prompt.
-# Based on the official starship "catppuccin-powerline" preset.
+# Catppuccin Mocha prompt, rounded pill style.
+# Each segment carries its own end caps, so empty segments (no git repo,
+# no node project) leave no orphaned separator glyphs behind.
 # Switch flavor by changing `palette` below (mocha / macchiato / frappe / latte).
 
 format = """
-[](peach)\
 $directory\
-[](bg:yellow fg:peach)\
 $git_branch\
 $git_status\
-[](fg:yellow bg:green)\
 $nodejs\
 $bun\
 $deno\
@@ -18,9 +16,7 @@ $python\
 $golang\
 $rust\
 $java\
-[](fg:green bg:lavender)\
 $time\
-[ ](fg:lavender)\
 $cmd_duration\
 $character"""
 
@@ -28,66 +24,66 @@ palette = 'catppuccin_mocha'
 
 [directory]
 style = "bg:peach fg:crust"
-format = "[ $path ]($style)"
+format = "[](fg:peach)[$path]($style)[](fg:peach) "
 truncation_length = 3
 truncation_symbol = "…/"
 
 [directory.substitutions]
 "Documents" = "󰈙 "
-"Downloads" = " "
+"Downloads" = " "
 "Music" = "󰝚 "
-"Pictures" = " "
+"Pictures" = " "
 "workspace" = "󰲋 "
 
 [git_branch]
-symbol = ""
-style = "bg:yellow"
-format = '[[ $symbol $branch ](fg:crust bg:yellow)]($style)'
+symbol = ""
+style = "bg:yellow fg:crust"
+format = '[](fg:yellow)[$symbol $branch]($style)[](fg:yellow) '
 
 [git_status]
-style = "bg:yellow"
-format = '[[($all_status$ahead_behind )](fg:crust bg:yellow)]($style)'
+style = "bg:yellow fg:crust"
+format = '([](fg:yellow)[$all_status$ahead_behind]($style)[](fg:yellow) )'
 
 [nodejs]
-symbol = ""
-style = "bg:green"
-format = '[[ $symbol( $version) ](fg:crust bg:green)]($style)'
+symbol = ""
+style = "bg:green fg:crust"
+format = '[](fg:green)[$symbol( $version)]($style)[](fg:green) '
 
 [bun]
-symbol = ""
-style = "bg:green"
-format = '[[ $symbol( $version) ](fg:crust bg:green)]($style)'
+symbol = ""
+style = "bg:green fg:crust"
+format = '[](fg:green)[$symbol( $version)]($style)[](fg:green) '
 
 [deno]
 symbol = "🦕"
-style = "bg:green"
-format = '[[ $symbol( $version) ](fg:crust bg:green)]($style)'
+style = "bg:green fg:crust"
+format = '[](fg:green)[$symbol( $version)]($style)[](fg:green) '
 
 [python]
-symbol = ""
-style = "bg:green"
-format = '[[ $symbol( $version)(\(#$virtualenv\)) ](fg:crust bg:green)]($style)'
+symbol = ""
+style = "bg:green fg:crust"
+format = '[](fg:green)[$symbol( $version)(\(#$virtualenv\))]($style)[](fg:green) '
 
 [golang]
-symbol = ""
-style = "bg:green"
-format = '[[ $symbol( $version) ](fg:crust bg:green)]($style)'
+symbol = ""
+style = "bg:green fg:crust"
+format = '[](fg:green)[$symbol( $version)]($style)[](fg:green) '
 
 [rust]
-symbol = ""
-style = "bg:green"
-format = '[[ $symbol( $version) ](fg:crust bg:green)]($style)'
+symbol = ""
+style = "bg:green fg:crust"
+format = '[](fg:green)[$symbol( $version)]($style)[](fg:green) '
 
 [java]
-symbol = " "
-style = "bg:green"
-format = '[[ $symbol( $version) ](fg:crust bg:green)]($style)'
+symbol = " "
+style = "bg:green fg:crust"
+format = '[](fg:green)[$symbol( $version)]($style)[](fg:green) '
 
 [time]
 disabled = false
 time_format = "%R"
-style = "bg:lavender"
-format = '[[  $time ](fg:crust bg:lavender)]($style)'
+style = "bg:lavender fg:crust"
+format = '[](fg:lavender)[ $time]($style)[](fg:lavender) '
 
 [character]
 disabled = false
@@ -100,8 +96,7 @@ vimcmd_visual_symbol = '[❮](bold fg:yellow)'
 
 [cmd_duration]
 min_time = 2000
-format = " took $duration "
-style = "fg:overlay1"
+format = '[took $duration ](fg:overlay1)'
 disabled = false
 
 [palettes.catppuccin_mocha]
