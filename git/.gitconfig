@@ -1,15 +1,18 @@
-# Git Configuration
-# Modern setup with delta for beautiful diffs
+# Git configuration
+# Identity lives in ~/.gitconfig.local (created by install.sh, never committed).
 
-[user]
-	name = Sergei Romanov
-	email = ikwach@gmail.com
+[include]
+	path = ~/.gitconfig.local
+	path = ~/.config/delta/catppuccin.gitconfig
+
+# Per-directory identity override example (add to ~/.gitconfig.local):
+# [includeIf "gitdir:~/workspace/"]
+#	path = ~/.gitconfig.work
 
 [core]
 	editor = nvim
 	pager = delta
 	autocrlf = input
-	excludesfile = ~/.gitignore_global
 
 [init]
 	defaultBranch = main
@@ -19,6 +22,7 @@
 
 [push]
 	default = simple
+	autoSetupRemote = true
 	followTags = true
 
 [fetch]
@@ -28,59 +32,33 @@
 	autoStash = true
 
 [merge]
-	conflictstyle = diff3
+	conflictstyle = zdiff3
 
 [diff]
 	colorMoved = default
+
+[branch]
+	sort = -committerdate
+
+[rerere]
+	enabled = true
 
 [interactive]
 	diffFilter = delta --color-only
 
 [delta]
 	navigate = true
-	light = false
-	side-by-side = true
 	line-numbers = true
-	syntax-theme = Monokai Extended
-
-[delta "decorations"]
-	commit-decoration-style = bold yellow box ul
-	file-style = bold yellow ul
-	file-decoration-style = none
+	features = catppuccin-mocha
 
 [alias]
-	# Shortcuts
 	st = status
 	co = checkout
 	br = branch
 	ci = commit
 	unstage = reset HEAD --
 	last = log -1 HEAD
-
-	# Logging
-	lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
-	lga = log --graph --all --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
-
-	# Useful commands
 	amend = commit --amend --no-edit
 	undo = reset --soft HEAD^
-	discard = checkout --
-
-[color]
-	ui = auto
-
-[color "branch"]
-	current = yellow reverse
-	local = yellow
-	remote = green
-
-[color "diff"]
-	meta = yellow bold
-	frag = magenta bold
-	old = red bold
-	new = green bold
-
-[color "status"]
-	added = yellow
-	changed = green
-	untracked = cyan
+	lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+	lga = log --graph --all --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
