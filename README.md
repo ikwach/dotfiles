@@ -61,7 +61,7 @@ Ctrl+T        # fuzzy file picker (fzf)
 ll / la / lt  # eza listings (long / all / tree)
 lg            # lazygit
 osup          # update brew + App Store + macOS
-mise use -g node@24   # runtime versions (replaces nvm/pyenv/rbenv)
+mise use -g node@lts  # runtime versions (replaces nvm/pyenv/rbenv)
 ```
 
 ## Theming

@@ -7,9 +7,6 @@ export EZA_CONFIG_DIR="$XDG_CONFIG_HOME/eza"
 export BAT_THEME="Catppuccin Mocha"
 export EDITOR="nvim"
 
-# Colored man pages via bat
-export MANPAGER="sh -c 'col -bx | bat -l man -p'"
-
 # Local binaries (also where dotfiles bin/ scripts are linked)
 export PATH="$HOME/.local/bin:$PATH"
 
@@ -22,18 +19,37 @@ export FZF_DEFAULT_OPTS=" \
 --color=border:#6c7086,label:#cdd6f4"
 
 # ========================================
+# History
+# ========================================
+
+# macOS ships SAVEHIST=1000, which starves zsh-autosuggestions
+HISTSIZE=50000
+SAVEHIST=50000
+setopt SHARE_HISTORY      # write and import history as commands run
+setopt HIST_IGNORE_DUPS   # skip consecutive duplicates
+setopt HIST_IGNORE_SPACE  # commands starting with a space stay out
+
+# ========================================
 # Plugins (antidote)
 # ========================================
 
-source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
-antidote load
+# Everything below is guarded so the shell starts cleanly even before
+# install.sh has run (or on machines where some tools are blocked).
+if command -v brew >/dev/null; then
+  ANTIDOTE_ZSH="$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
+  if [[ -r "$ANTIDOTE_ZSH" ]]; then
+    source "$ANTIDOTE_ZSH"
+    antidote load
+  fi
+  unset ANTIDOTE_ZSH
+fi
 
 # ========================================
 # Tool integrations
 # ========================================
 
 # fzf keybindings (Ctrl+T files, Alt+C dirs)
-source <(fzf --zsh)
+command -v fzf >/dev/null && source <(fzf --zsh)
 
 # atuin shell history (takes over Ctrl+R; keeps arrow keys as-is)
 command -v atuin >/dev/null && eval "$(atuin init zsh --disable-up-arrow)"
@@ -48,12 +64,20 @@ command -v mise >/dev/null && eval "$(mise activate zsh)"
 # Aliases
 # ========================================
 
-alias ls="eza --icons"
-alias ll="eza --icons -l"
-alias la="eza --icons -la"
-alias lt="eza --icons --tree --level=2"
-alias cat="bat"
-alias lg="lazygit"
+if command -v eza >/dev/null; then
+  alias ls="eza --icons"
+  alias ll="eza --icons -l"
+  alias la="eza --icons -la"
+  alias lt="eza --icons --tree --level=2"
+fi
+
+if command -v bat >/dev/null; then
+  alias cat="bat"
+  # Colored man pages via bat
+  export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+fi
+
+command -v lazygit >/dev/null && alias lg="lazygit"
 
 # Update everything: Homebrew, App Store apps, macOS
 alias osup="brew update && brew upgrade && brew cleanup && mas upgrade && sudo softwareupdate -i --restart"
@@ -88,4 +112,4 @@ fi
 # Prompt
 # ========================================
 
-eval "$(starship init zsh)"
+command -v starship >/dev/null && eval "$(starship init zsh)"

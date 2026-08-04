@@ -61,23 +61,30 @@ if ! command -v brew >/dev/null 2>&1; then
 fi
 success "Homebrew ready"
 
+# A single blocked package (e.g. a cask denied by MDM policy) should not
+# abort the whole install before symlinks and identity are set up.
 info "Installing packages (this can take a while)..."
 if [[ "$MODE" == "personal" ]]; then
-  cat "$DOTFILES_DIR/Brewfile.core" "$DOTFILES_DIR/Brewfile.personal" | brew bundle --file=-
+  cat "$DOTFILES_DIR/Brewfile.core" "$DOTFILES_DIR/Brewfile.personal" | brew bundle --file=- \
+    || warning "Some packages failed to install; continuing with setup"
 else
-  brew bundle --file="$DOTFILES_DIR/Brewfile.core"
+  brew bundle --file="$DOTFILES_DIR/Brewfile.core" \
+    || warning "Some packages failed to install; continuing with setup"
 fi
-success "Packages installed"
+success "Package installation finished"
 
 # ----------------------------------------
 # Symlinks (existing regular files are backed up first)
 # ----------------------------------------
 
+# Backups mirror the path under $HOME so same-named files cannot collide,
+# and the original is only removed once the copy has succeeded.
 link() {
   local source="$1" target="$2"
   if [[ -e "$target" && ! -L "$target" ]]; then
-    mkdir -p "$BACKUP_DIR"
-    cp -r "$target" "$BACKUP_DIR/" 2>/dev/null || true
+    local rel="${target#"$HOME"/}"
+    mkdir -p "$BACKUP_DIR/$(dirname "$rel")"
+    cp -r "$target" "$BACKUP_DIR/$rel" || fail "Could not back up $target, aborting before overwriting it"
     rm -rf "$target"
   fi
   mkdir -p "$(dirname "$target")"
@@ -100,12 +107,19 @@ link "$DOTFILES_DIR/themes/btop/catppuccin_mocha.theme"  "$HOME/.config/btop/the
 link "$DOTFILES_DIR/lazygit/config.yml"                  "$HOME/.config/lazygit/config.yml"
 link "$DOTFILES_DIR/tealdeer/config.toml"                "$HOME/Library/Application Support/tealdeer/config.toml"
 
-# bin/ scripts onto PATH
+# bin/ scripts onto PATH (gifenc needs ffmpeg, which only personal mode installs)
 mkdir -p "$HOME/.local/bin"
 for script in "$DOTFILES_DIR"/bin/*; do
-  [[ -f "$script" ]] && ln -sfn "$script" "$HOME/.local/bin/$(basename "$script")"
+  [[ -f "$script" ]] || continue
+  name="$(basename "$script")"
+  [[ "$MODE" == "corporate" && "$name" == "gifenc" ]] && continue
+  ln -sfn "$script" "$HOME/.local/bin/$name"
 done
 success "Linked bin/ scripts to ~/.local/bin"
+
+if [[ -f "$HOME/.gitignore_global" ]]; then
+  warning "The old ~/.gitignore_global is no longer used; global ignores now live in ~/.config/git/ignore"
+fi
 
 [[ -d "$BACKUP_DIR" ]] && info "Previous configs backed up to $BACKUP_DIR"
 
@@ -170,7 +184,7 @@ tldr --update >/dev/null 2>&1 && success "tldr cache updated"
 
 if [[ "$SHELL" != *zsh ]]; then
   info "Setting zsh as default shell..."
-  chsh -s "$(command -v zsh)"
+  chsh -s "$(command -v zsh)" || warning "Could not change the default shell; run chsh manually"
 fi
 
 # ----------------------------------------

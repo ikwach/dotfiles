@@ -22,7 +22,6 @@ $java\
 $time\
 [ ](fg:lavender)\
 $cmd_duration\
-$line_break\
 $character"""
 
 palette = 'catppuccin_mocha'
@@ -89,9 +88,6 @@ disabled = false
 time_format = "%R"
 style = "bg:lavender"
 format = '[[  $time ](fg:crust bg:lavender)]($style)'
-
-[line_break]
-disabled = true
 
 [character]
 disabled = false
