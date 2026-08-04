@@ -92,6 +92,15 @@ compose_brewfile() {
   return 0
 }
 
+# Homebrew 6 refuses formulae from untrusted third-party taps, and one
+# refusal aborts the whole batched bundle install. Taps declared in our
+# Brewfiles are trusted by virtue of being committed here.
+if brew trust --help >/dev/null 2>&1; then
+  while IFS= read -r tap_name; do
+    brew trust --tap "$tap_name" >/dev/null 2>&1 || warning "Could not trust tap $tap_name"
+  done < <(compose_brewfile | awk -F'"' '/^tap /{print $2}')
+fi
+
 info "Installing packages (this can take a while)..."
 if [[ "$OS" == "linux" ]]; then
   # Casks are a macOS concept; drop any that appear in Brewfile.personal

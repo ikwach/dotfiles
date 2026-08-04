@@ -11,8 +11,6 @@ cask "gcloud-cli"     # Google Cloud SDK
 brew "cloud-sql-proxy"
 brew "firebase-cli"
 brew "vercel"
-tap "supabase/tap"
-brew "supabase/tap/supabase"
 
 # --- Media & documents ---
 brew "ffmpeg"
