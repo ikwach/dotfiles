@@ -1,0 +1,3 @@
+# bat configuration (linked to ~/.config/bat/config)
+--theme="Catppuccin Mocha"
+--style="numbers,changes,header"

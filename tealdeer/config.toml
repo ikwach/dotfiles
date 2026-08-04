@@ -1,32 +1,23 @@
+# tealdeer configuration (linked to ~/Library/Application Support/tealdeer/config.toml)
+# Colors: catppuccin mocha
+
 [style.description]
-foreground = { rgb = [252, 252, 250] }  # Monokai Pro Spectrum foreground
-underline = false
-bold = false
-italic = false
+foreground = { rgb = [205, 214, 244] }  # text
 
 [style.command_name]
-foreground = { rgb = [252, 145, 88] }   # Monokai Pro Spectrum orange
-underline = false
+foreground = { rgb = [250, 179, 135] }  # peach
 bold = true
-italic = false
 
 [style.example_text]
-foreground = { rgb = [191, 199, 213] }  # Monokai Pro Spectrum comment gray
-underline = false
-bold = false
-italic = false
+foreground = { rgb = [166, 173, 200] }  # subtext0
 
 [style.example_code]
-foreground = { rgb = [120, 220, 232] }  # Monokai Pro Spectrum cyan
-underline = false
+foreground = { rgb = [137, 220, 235] }  # sky
 bold = true
-italic = false
 
 [style.example_variable]
-foreground = { rgb = [255, 97, 136] }   # Monokai Pro Spectrum pink
+foreground = { rgb = [245, 194, 231] }  # pink
 underline = true
-bold = false
-italic = false
 
 [display]
 compact = false
@@ -38,7 +29,3 @@ auto_update = true
 auto_update_interval_hours = 720
 archive_source = "https://github.com/tldr-pages/tldr/releases/latest/download/"
 tls_backend = "rustls-with-webpki-roots"
-
-[directories]
-
-[search]
