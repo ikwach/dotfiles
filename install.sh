@@ -141,6 +141,7 @@ link "$DOTFILES_DIR/themes/bat/Catppuccin Mocha.tmTheme" "$HOME/.config/bat/them
 link "$DOTFILES_DIR/themes/eza/catppuccin-mocha.yml"     "$HOME/.config/eza/theme.yml"
 link "$DOTFILES_DIR/themes/btop/catppuccin_mocha.theme"  "$HOME/.config/btop/themes/catppuccin_mocha.theme"
 link "$DOTFILES_DIR/lazygit/config.yml"                  "$HOME/.config/lazygit/config.yml"
+link "$DOTFILES_DIR/nvim"                                "$HOME/.config/nvim"
 link "$DOTFILES_DIR/tealdeer/config.toml"                "$TEALDEER_CONFIG"
 
 # bin/ scripts onto PATH (gifenc needs ffmpeg, which only personal mode installs)

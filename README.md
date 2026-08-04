@@ -44,6 +44,7 @@ zsh/                 # .zshrc + antidote plugin list
 starship/            # prompt config (catppuccin mocha powerline)
 git/                 # .gitconfig (identity excluded) + global ignore
 tmux/                # tmux config with catppuccin v2
+nvim/                # AstroNvim v6 (language packs, catppuccin, pinned lockfile)
 bat/  lazygit/  tealdeer/   # per-tool configs
 themes/              # vendored catppuccin themes (bat, delta, btop, eza, iterm)
 bin/                 # gifenc (ffmpeg gif encoder), super-sync (rsync watch)
@@ -83,6 +84,6 @@ cd ~/workspace/dotfiles && git pull && ./install.sh <mode>
 
 ## Notes
 
-- Neovim config is managed separately in `~/.config/nvim` (AstroNvim).
+- Neovim is AstroNvim v6 with community packs for TypeScript, Rust, Go, Python, JSON, YAML and Markdown, catppuccin, and `lazy-lock.json` committed so plugin versions are identical on every machine. First launch finishes installing language servers automatically; run `:Lazy update` on your own schedule and commit the refreshed lockfile.
 - `mise` reads `.nvmrc` / `.tool-versions` / `.python-version` automatically per project.
 - tmux plugins install on first launch, or `prefix + I` (prefix is `Ctrl+a`).
