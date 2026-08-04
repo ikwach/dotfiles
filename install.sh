@@ -93,7 +93,6 @@ link "$DOTFILES_DIR/git/.gitconfig"                      "$HOME/.gitconfig"
 link "$DOTFILES_DIR/git/ignore"                          "$HOME/.config/git/ignore"
 link "$DOTFILES_DIR/themes/delta/catppuccin.gitconfig"   "$HOME/.config/delta/catppuccin.gitconfig"
 link "$DOTFILES_DIR/tmux/.tmux.conf"                     "$HOME/.tmux.conf"
-link "$DOTFILES_DIR/ghostty/config"                      "$HOME/.config/ghostty/config"
 link "$DOTFILES_DIR/bat/config"                          "$HOME/.config/bat/config"
 link "$DOTFILES_DIR/themes/bat/Catppuccin Mocha.tmTheme" "$HOME/.config/bat/themes/Catppuccin Mocha.tmTheme"
 link "$DOTFILES_DIR/themes/eza/catppuccin-mocha.yml"     "$HOME/.config/eza/theme.yml"
@@ -138,7 +137,7 @@ fi
 
 if [[ ! -f "$HOME/.secrets.env" ]]; then
   cat > "$HOME/.secrets.env" <<'EOF'
-# API keys and tokens — sourced by .zshrc, never committed anywhere.
+# API keys and tokens - sourced by .zshrc, never committed anywhere.
 # Prefer 1Password CLI where possible:  export MY_KEY="$(op read 'op://vault/item/field')"
 # export OPENAI_API_KEY="..."
 # export ANTHROPIC_API_KEY="..."
@@ -182,10 +181,13 @@ echo ""
 success "Installation complete ($MODE mode)."
 echo ""
 info "Next steps:"
-echo "  1. Open Ghostty (or restart your terminal)"
-echo "  2. Runtime versions:    mise use -g node@lts"
-echo "  3. Import history:      atuin import zsh"
+echo "  1. Restart your terminal"
+echo "  2. iTerm2 theme: Settings > Profiles > Colors > Color Presets > Import"
+echo "     -> $DOTFILES_DIR/themes/iterm/catppuccin-mocha.itermcolors"
+echo "     then Settings > Profiles > Text > Font -> JetBrainsMono Nerd Font"
+echo "  3. Runtime versions:    mise use -g node@lts"
+echo "  4. Import history:      atuin import zsh"
 if [[ "$MODE" == "personal" ]]; then
-  echo "  4. Sign in:             claude   /   gcloud auth login   /   op signin"
+  echo "  5. Sign in:             claude   /   gcloud auth login   /   op signin"
 fi
 echo ""

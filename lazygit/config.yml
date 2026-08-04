@@ -1,5 +1,5 @@
 # lazygit configuration (linked to ~/.config/lazygit/config.yml)
-# Theme: catppuccin mocha (blue accent) — github.com/catppuccin/lazygit
+# Theme: catppuccin mocha (blue accent) - github.com/catppuccin/lazygit
 gui:
   nerdFontsVersion: "3"
   theme:

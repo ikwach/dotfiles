@@ -1,4 +1,4 @@
-# Brewfile.personal — extras installed ONLY in personal mode.
+# Brewfile.personal - extras installed ONLY in personal mode.
 
 # --- AI tooling ---
 cask "claude-code"    # Claude Code CLI
@@ -19,4 +19,4 @@ brew "pandoc"
 
 # --- Utilities ---
 brew "rclone"         # cloud storage sync
-cask "1password-cli"  # op — secrets from 1Password
+cask "1password-cli"  # op - secrets from 1Password

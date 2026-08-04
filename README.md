@@ -1,6 +1,6 @@
 # dotfiles
 
-macOS development environment — starship + catppuccin mocha, modern CLI tools, one-command install with two modes.
+macOS development environment - starship + catppuccin mocha, modern CLI tools, one-command install with two modes.
 
 ## Install
 
@@ -12,7 +12,7 @@ cd ~/workspace/dotfiles
 ./install.sh corporate   # restricted: core CLI tools only
 ```
 
-The installer is idempotent — rerun it any time. Existing configs are backed up to `~/.dotfiles-backup-<timestamp>` before being replaced with symlinks.
+The installer is idempotent - rerun it any time. Existing configs are backed up to `~/.dotfiles-backup-<timestamp>` before being replaced with symlinks.
 
 ## Modes
 
@@ -21,13 +21,13 @@ The installer is idempotent — rerun it any time. Existing configs are backed u
 | Shell: zsh + antidote + starship (catppuccin) | ✅ | ✅ |
 | CLI: bat, eza, ripgrep, fd, fzf, zoxide, atuin, dust, btop, jq, yq, tealdeer | ✅ | ✅ |
 | Git: delta (catppuccin), lazygit, gh | ✅ | ✅ |
-| Dev: neovim, mise, tmux, Ghostty, JetBrains Mono Nerd Font | ✅ | ✅ |
-| AI: Claude Code, Claude desktop | — | ✅ |
-| Cloud: gcloud, cloud-sql-proxy, firebase, vercel, supabase | — | ✅ |
-| Media: ffmpeg, yt-dlp, pandoc, rclone | — | ✅ |
-| 1Password CLI | — | ✅ |
+| Dev: neovim, mise, tmux, iTerm2, JetBrains Mono Nerd Font | ✅ | ✅ |
+| AI: Claude Code, Claude desktop | - | ✅ |
+| Cloud: gcloud, cloud-sql-proxy, firebase, vercel, supabase | - | ✅ |
+| Media: ffmpeg, yt-dlp, pandoc, rclone | - | ✅ |
+| 1Password CLI | - | ✅ |
 
-Corporate mode also prompts for your **work** git email, and nothing personal is baked into the repo — identity, secrets, and machine-specific config all live in local files (see below).
+Corporate mode also prompts for your **work** git email, and nothing personal is baked into the repo - identity, secrets, and machine-specific config all live in local files (see below).
 
 ## What's where
 
@@ -39,9 +39,8 @@ zsh/                 # .zshrc + antidote plugin list
 starship/            # prompt config (catppuccin mocha powerline)
 git/                 # .gitconfig (identity excluded) + global ignore
 tmux/                # tmux config with catppuccin v2
-ghostty/             # terminal config (catppuccin built in)
 bat/  lazygit/  tealdeer/   # per-tool configs
-themes/              # vendored catppuccin themes (bat, delta, btop, eza)
+themes/              # vendored catppuccin themes (bat, delta, btop, eza, iterm)
 bin/                 # gifenc (ffmpeg gif encoder), super-sync (rsync watch)
 ```
 
@@ -49,7 +48,7 @@ bin/                 # gifenc (ffmpeg gif encoder), super-sync (rsync watch)
 
 | File | Purpose |
 |---|---|
-| `~/.gitconfig.local` | git name/email — created by installer |
+| `~/.gitconfig.local` | git name/email - created by installer |
 | `~/.secrets.env` | API keys, `chmod 600`, sourced by `.zshrc`; prefer `op read` for values |
 | `~/.zshrc.local` | machine-specific shell config |
 
@@ -67,9 +66,9 @@ mise use -g node@24   # runtime versions (replaces nvm/pyenv/rbenv)
 
 ## Theming
 
-Everything is [catppuccin](https://github.com/catppuccin) **mocha**: starship, Ghostty, bat, fzf, delta, lazygit, btop, eza, tmux, tealdeer. To change flavor: edit `palette =` in `starship/starship.toml`, `theme =` in `ghostty/config`, and swap the vendored files in `themes/` from the corresponding catppuccin repo.
+Everything is [catppuccin](https://github.com/catppuccin) **mocha**: starship, iTerm2, bat, fzf, delta, lazygit, btop, eza, tmux, tealdeer. To change flavor: edit `palette =` in `starship/starship.toml` and swap the vendored files in `themes/` from the corresponding catppuccin repo.
 
-Using iTerm2 instead of Ghostty? Import a scheme from [catppuccin/iterm](https://github.com/catppuccin/iterm) (Settings → Profiles → Colors → Import) and set the font to JetBrainsMono Nerd Font.
+iTerm2 needs a one-time manual setup (its settings aren't file-based): Settings > Profiles > Colors > Color Presets > Import > `themes/iterm/catppuccin-mocha.itermcolors`, and Settings > Profiles > Text > Font > **JetBrainsMono Nerd Font** (needed for the prompt icons).
 
 ## Updating
 

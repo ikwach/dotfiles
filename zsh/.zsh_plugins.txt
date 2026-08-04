@@ -1,4 +1,4 @@
-# Antidote plugin list — https://antidote.sh
+# Antidote plugin list - https://antidote.sh
 # After editing, restart the shell (antidote re-bundles automatically).
 
 # Handles compinit with caching; must load before completion consumers
@@ -10,5 +10,5 @@ zsh-users/zsh-completions kind:fpath path:src
 # Fish-like inline suggestions from history
 zsh-users/zsh-autosuggestions
 
-# Syntax highlighting — keep last
+# Syntax highlighting - keep last
 zdharma-continuum/fast-syntax-highlighting

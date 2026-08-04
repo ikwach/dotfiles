@@ -1,4 +1,4 @@
-# Brewfile.core — installed in BOTH personal and corporate modes.
+# Brewfile.core - installed in BOTH personal and corporate modes.
 # Composed by install.sh:  cat Brewfile.core [Brewfile.personal] | brew bundle --file=-
 
 # --- Shell & prompt ---
@@ -32,5 +32,5 @@ brew "tmux"
 brew "mas"            # Mac App Store CLI
 
 # --- Terminal & font ---
-cask "ghostty"                        # GPU-native terminal, catppuccin built in
+cask "iterm2"
 cask "font-jetbrains-mono-nerd-font"  # required for prompt icons
