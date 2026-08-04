@@ -1,0 +1,36 @@
+# Brewfile.core — installed in BOTH personal and corporate modes.
+# Composed by install.sh:  cat Brewfile.core [Brewfile.personal] | brew bundle --file=-
+
+# --- Shell & prompt ---
+brew "antidote"       # zsh plugin manager
+brew "starship"       # prompt
+brew "atuin"          # shell history (Ctrl+R)
+brew "fzf"            # fuzzy finder
+brew "zoxide"         # smart cd (z)
+
+# --- Modern CLI replacements ---
+brew "bat"            # cat
+brew "eza"            # ls
+brew "ripgrep"        # grep
+brew "fd"             # find
+brew "dust"           # du
+brew "btop"           # top
+brew "git-delta"      # git diff pager
+brew "jq"             # JSON
+brew "yq"             # YAML
+brew "tealdeer"       # tldr pages
+
+# --- Development ---
+brew "git"
+brew "gh"             # GitHub CLI
+brew "lazygit"        # git TUI
+brew "neovim"
+brew "mise"           # polyglot version manager (replaces nvm/pyenv/rbenv)
+brew "tmux"
+
+# --- macOS ---
+brew "mas"            # Mac App Store CLI
+
+# --- Terminal & font ---
+cask "ghostty"                        # GPU-native terminal, catppuccin built in
+cask "font-jetbrains-mono-nerd-font"  # required for prompt icons

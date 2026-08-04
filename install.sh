@@ -1,218 +1,191 @@
 #!/usr/bin/env bash
+#
+# Dotfiles installer
+#
+# Usage:
+#   ./install.sh personal    # full setup: core + AI, cloud, media tools
+#   ./install.sh corporate   # restricted setup: core CLI tools only
+#
+set -euo pipefail
 
-# ========================================
-# Dotfiles Installation Script
-# ========================================
-
-set -e  # Exit on error
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Helper functions
-info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-success() { echo -e "${GREEN}[✓]${NC} $1"; }
-warning() { echo -e "${YELLOW}[!]${NC} $1"; }
-error() { echo -e "${RED}[✗]${NC} $1"; }
-
-# ========================================
-# Configuration
-# ========================================
-
-DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_DIR="$HOME/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
 
-# ========================================
-# Welcome
-# ========================================
+BLUE='\033[0;34m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
+info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
+success() { echo -e "${GREEN}[OK]${NC} $1"; }
+warning() { echo -e "${YELLOW}[!]${NC} $1"; }
+fail()    { echo -e "${RED}[ERR]${NC} $1"; exit 1; }
 
-echo ""
-echo "╔════════════════════════════════════════╗"
-echo "║   Dotfiles Installation (2025)         ║"
-echo "╚════════════════════════════════════════╝"
-echo ""
-info "Installation directory: $DOTFILES_DIR"
-info "Backup directory: $BACKUP_DIR"
-echo ""
+# ----------------------------------------
+# Mode selection
+# ----------------------------------------
 
-# ========================================
-# Check OS
-# ========================================
-
-if [[ "$OSTYPE" != "darwin"* ]]; then
-    error "This script is only supported on macOS"
-    exit 1
+MODE="${1:-}"
+if [[ -z "$MODE" ]]; then
+  if [[ -t 0 ]]; then
+    echo "Select installation mode:"
+    echo "  1) personal   - everything: core tools + AI, cloud, media"
+    echo "  2) corporate  - restricted: core CLI tools only"
+    read -rp "Mode [1/2]: " choice
+    case "$choice" in
+      1) MODE="personal" ;;
+      2) MODE="corporate" ;;
+      *) fail "Invalid choice" ;;
+    esac
+  else
+    fail "No mode given. Usage: ./install.sh personal|corporate"
+  fi
 fi
+[[ "$MODE" == "personal" || "$MODE" == "corporate" ]] || fail "Unknown mode: $MODE (use personal|corporate)"
 
-# ========================================
-# Install Homebrew
-# ========================================
+[[ "$OSTYPE" == darwin* ]] || fail "This script only supports macOS"
 
-info "Checking Homebrew..."
-if ! command -v brew &> /dev/null; then
-    info "Installing Homebrew..."
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+echo ""
+info "Mode: $MODE"
+info "Dotfiles: $DOTFILES_DIR"
+echo ""
 
-    # Add Homebrew to PATH (Apple Silicon)
-    if [[ $(uname -m) == 'arm64' ]]; then
-        echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
-        eval "$(/opt/homebrew/bin/brew shellenv)"
-    fi
-    success "Homebrew installed"
+# ----------------------------------------
+# Homebrew
+# ----------------------------------------
+
+if ! command -v brew >/dev/null 2>&1; then
+  info "Installing Homebrew..."
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  if [[ "$(uname -m)" == "arm64" ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+    grep -q 'brew shellenv' "$HOME/.zprofile" 2>/dev/null || \
+      echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
+  fi
+fi
+success "Homebrew ready"
+
+info "Installing packages (this can take a while)..."
+if [[ "$MODE" == "personal" ]]; then
+  cat "$DOTFILES_DIR/Brewfile.core" "$DOTFILES_DIR/Brewfile.personal" | brew bundle --file=-
 else
-    success "Homebrew already installed"
+  brew bundle --file="$DOTFILES_DIR/Brewfile.core"
 fi
+success "Packages installed"
 
-# ========================================
-# Install Homebrew packages
-# ========================================
+# ----------------------------------------
+# Symlinks (existing regular files are backed up first)
+# ----------------------------------------
 
-if [ -f "$DOTFILES_DIR/Brewfile" ]; then
-    info "Installing Homebrew packages..."
-    brew bundle --file="$DOTFILES_DIR/Brewfile"
-    success "Homebrew packages installed"
-else
-    warning "Brewfile not found, skipping package installation"
-fi
-
-# ========================================
-# Backup existing dotfiles
-# ========================================
-
-info "Backing up existing dotfiles..."
-mkdir -p "$BACKUP_DIR"
-
-backup_file() {
-    local file=$1
-    if [ -f "$file" ] || [ -d "$file" ]; then
-        info "Backing up $file"
-        cp -r "$file" "$BACKUP_DIR/"
-    fi
+link() {
+  local source="$1" target="$2"
+  if [[ -e "$target" && ! -L "$target" ]]; then
+    mkdir -p "$BACKUP_DIR"
+    cp -r "$target" "$BACKUP_DIR/" 2>/dev/null || true
+    rm -rf "$target"
+  fi
+  mkdir -p "$(dirname "$target")"
+  ln -sfn "$source" "$target"
+  success "Linked $target"
 }
 
-backup_file "$HOME/.zshrc"
-backup_file "$HOME/.zsh_plugins.txt"
-backup_file "$HOME/.p10k.zsh"
-backup_file "$HOME/.gitconfig"
-backup_file "$HOME/.tmux.conf"
-backup_file "$HOME/.config/nvim"
+info "Linking dotfiles..."
+link "$DOTFILES_DIR/zsh/.zshrc"                          "$HOME/.zshrc"
+link "$DOTFILES_DIR/zsh/.zsh_plugins.txt"                "$HOME/.zsh_plugins.txt"
+link "$DOTFILES_DIR/starship/starship.toml"              "$HOME/.config/starship.toml"
+link "$DOTFILES_DIR/git/.gitconfig"                      "$HOME/.gitconfig"
+link "$DOTFILES_DIR/git/ignore"                          "$HOME/.config/git/ignore"
+link "$DOTFILES_DIR/themes/delta/catppuccin.gitconfig"   "$HOME/.config/delta/catppuccin.gitconfig"
+link "$DOTFILES_DIR/tmux/.tmux.conf"                     "$HOME/.tmux.conf"
+link "$DOTFILES_DIR/ghostty/config"                      "$HOME/.config/ghostty/config"
+link "$DOTFILES_DIR/bat/config"                          "$HOME/.config/bat/config"
+link "$DOTFILES_DIR/themes/bat/Catppuccin Mocha.tmTheme" "$HOME/.config/bat/themes/Catppuccin Mocha.tmTheme"
+link "$DOTFILES_DIR/themes/eza/catppuccin-mocha.yml"     "$HOME/.config/eza/theme.yml"
+link "$DOTFILES_DIR/themes/btop/catppuccin_mocha.theme"  "$HOME/.config/btop/themes/catppuccin_mocha.theme"
+link "$DOTFILES_DIR/lazygit/config.yml"                  "$HOME/.config/lazygit/config.yml"
+link "$DOTFILES_DIR/tealdeer/config.toml"                "$HOME/Library/Application Support/tealdeer/config.toml"
 
-success "Backup complete: $BACKUP_DIR"
+# bin/ scripts onto PATH
+mkdir -p "$HOME/.local/bin"
+for script in "$DOTFILES_DIR"/bin/*; do
+  [[ -f "$script" ]] && ln -sfn "$script" "$HOME/.local/bin/$(basename "$script")"
+done
+success "Linked bin/ scripts to ~/.local/bin"
 
-# ========================================
-# Create symlinks
-# ========================================
+[[ -d "$BACKUP_DIR" ]] && info "Previous configs backed up to $BACKUP_DIR"
 
-info "Creating symlinks..."
+# ----------------------------------------
+# Git identity (kept out of the repo)
+# ----------------------------------------
 
-create_symlink() {
-    local source=$1
-    local target=$2
-
-    # Remove existing file/link
-    if [ -e "$target" ] || [ -L "$target" ]; then
-        rm -rf "$target"
+if [[ ! -f "$HOME/.gitconfig.local" ]]; then
+  info "Setting up git identity (${MODE} mode)..."
+  if [[ -t 0 ]]; then
+    read -rp "Git name: " git_name
+    if [[ "$MODE" == "corporate" ]]; then
+      read -rp "Git email (use your WORK email): " git_email
+    else
+      read -rp "Git email: " git_email
     fi
-
-    # Create parent directory if needed
-    mkdir -p "$(dirname "$target")"
-
-    # Create symlink
-    ln -sf "$source" "$target"
-    success "Linked: $target -> $source"
-}
-
-# ZSH
-create_symlink "$DOTFILES_DIR/zsh/.zshrc" "$HOME/.zshrc"
-create_symlink "$DOTFILES_DIR/zsh/.zsh_plugins.txt" "$HOME/.zsh_plugins.txt"
-
-# Terminal
-create_symlink "$DOTFILES_DIR/terminal/.p10k.zsh" "$HOME/.p10k.zsh"
-
-# Git
-create_symlink "$DOTFILES_DIR/git/.gitconfig" "$HOME/.gitconfig"
-
-# Tmux
-create_symlink "$DOTFILES_DIR/tmux/.tmux.conf" "$HOME/.tmux.conf"
-
-# tealdeer
-create_symlink "$DOTFILES_DIR/tealdeer/config.toml" "$HOME/Library/Application Support/tealdeer/config.toml"
-
-success "Symlinks created"
-
-# ========================================
-# Install ZSH plugins
-# ========================================
-
-info "Installing ZSH plugins with Antidote..."
-if command -v antidote &> /dev/null; then
-    # Source antidote and load plugins
-    source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
-    antidote load
-    success "ZSH plugins installed"
+    printf '[user]\n\tname = %s\n\temail = %s\n' "$git_name" "$git_email" > "$HOME/.gitconfig.local"
+    success "Wrote ~/.gitconfig.local"
+  else
+    warning "Non-interactive shell: create ~/.gitconfig.local with your [user] name/email"
+  fi
 else
-    warning "Antidote not found, skipping plugin installation"
+  success "Git identity already configured (~/.gitconfig.local)"
 fi
 
-# ========================================
-# Install Powerlevel10k
-# ========================================
+# ----------------------------------------
+# Secrets file
+# ----------------------------------------
 
-info "Configuring Powerlevel10k..."
-success "Powerlevel10k installed (run 'p10k configure' to customize)"
+if [[ ! -f "$HOME/.secrets.env" ]]; then
+  cat > "$HOME/.secrets.env" <<'EOF'
+# API keys and tokens — sourced by .zshrc, never committed anywhere.
+# Prefer 1Password CLI where possible:  export MY_KEY="$(op read 'op://vault/item/field')"
+# export OPENAI_API_KEY="..."
+# export ANTHROPIC_API_KEY="..."
+EOF
+fi
+chmod 600 "$HOME/.secrets.env"
+success "Secrets file ready (~/.secrets.env, chmod 600)"
 
-# ========================================
-# Install Tmux Plugin Manager
-# ========================================
+# ----------------------------------------
+# Tool setup
+# ----------------------------------------
 
-info "Installing Tmux Plugin Manager (TPM)..."
-if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
-    git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
-    success "TPM installed (press prefix + I in tmux to install plugins)"
-else
-    success "TPM already installed"
+info "Building bat theme cache..."
+bat cache --build >/dev/null && success "bat themes ready"
+
+# btop rewrites its config on exit, so copy a default instead of symlinking
+if [[ ! -f "$HOME/.config/btop/btop.conf" ]]; then
+  printf 'color_theme = "catppuccin_mocha"\ntheme_background = False\nvim_keys = True\n' > "$HOME/.config/btop/btop.conf"
+  success "btop config created"
 fi
 
-# ========================================
-# Update tealdeer cache
-# ========================================
-
-info "Updating tealdeer cache..."
-if command -v tldr &> /dev/null; then
-    tldr --update
-    success "tealdeer cache updated"
+if [[ ! -d "$HOME/.tmux/plugins/tpm" ]]; then
+  info "Installing tmux plugin manager..."
+  git clone --depth 1 https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
+  success "TPM installed (prefix + I inside tmux installs plugins)"
 fi
 
-# ========================================
-# Set ZSH as default shell
-# ========================================
+info "Updating tldr cache..."
+tldr --update >/dev/null 2>&1 && success "tldr cache updated"
 
-if [ "$SHELL" != "$(which zsh)" ]; then
-    info "Setting ZSH as default shell..."
-    chsh -s "$(which zsh)"
-    success "ZSH set as default shell"
+if [[ "$SHELL" != *zsh ]]; then
+  info "Setting zsh as default shell..."
+  chsh -s "$(command -v zsh)"
 fi
 
-# ========================================
-# Done!
-# ========================================
+# ----------------------------------------
+# Done
+# ----------------------------------------
 
 echo ""
-echo "╔════════════════════════════════════════╗"
-echo "║   Installation Complete! 🎉            ║"
-echo "╚════════════════════════════════════════╝"
-echo ""
-success "Dotfiles installed successfully!"
+success "Installation complete ($MODE mode)."
 echo ""
 info "Next steps:"
-echo "  1. Restart your terminal"
-echo "  2. Run 'p10k configure' to customize your prompt"
-echo "  3. In tmux, press Ctrl+a then Shift+I to install plugins"
-echo "  4. Check Mac Setup guide for additional configuration"
-echo ""
-info "Backup location: $BACKUP_DIR"
+echo "  1. Open Ghostty (or restart your terminal)"
+echo "  2. Runtime versions:    mise use -g node@lts"
+echo "  3. Import history:      atuin import zsh"
+if [[ "$MODE" == "personal" ]]; then
+  echo "  4. Sign in:             claude   /   gcloud auth login   /   op signin"
+fi
 echo ""

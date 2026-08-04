@@ -1,44 +1,21 @@
 # macOS
 .DS_Store
-.AppleDouble
-.LSOverride
-Icon
 ._*
 
-# Thumbnails
-.Spotlight-V100
-.Trashes
+# Homebrew
+Brewfile.lock.json
 
-# Directories potentially created on remote AFP share
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-# Vim
+# Editors
 *.swp
 *.swo
-*~
-.netrwhist
 
-# ZSH
-.zcompdump*
-.zsh_sessions/
-
-# Personal files (don't commit sensitive data)
+# Never commit secrets or local overrides
 *.local
 *.secret
 .env
+.secrets.env
 
-# Backups
+# Backups & logs
 *.bak
 *.backup
-*~
-
-# Logs
 *.log
-
-# Temporary files
-tmp/
-temp/
