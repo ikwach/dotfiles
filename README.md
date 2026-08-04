@@ -2,6 +2,14 @@
 
 Development environment for macOS and Linux (Debian/Ubuntu) - starship + catppuccin mocha, modern CLI tools, one-command install with two modes.
 
+![Terminal](assets/terminal.png)
+
+*starship with the catppuccin powerline preset: git branch and dirty state, node version resolved from `.nvmrc` by mise, eza tree listing with icons and git status, bat syntax highlighting. Dracula+ in iTerm2.*
+
+![Neovim](assets/nvim.png)
+
+*AstroNvim v6: neo-tree with git status, TypeScript LSP (vtsls) on the statusline, gitsigns change markers, catppuccin - plugin versions pinned by a committed `lazy-lock.json`.*
+
 ## Install
 
 ```bash
