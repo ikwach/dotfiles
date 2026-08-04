@@ -71,9 +71,9 @@ mise use -g node@lts  # runtime versions (replaces nvm/pyenv/rbenv)
 
 ## Theming
 
-Everything is [catppuccin](https://github.com/catppuccin) **mocha**: starship, iTerm2, bat, fzf, delta, lazygit, btop, eza, tmux, tealdeer. To change flavor: edit `palette =` in `starship/starship.toml` and swap the vendored files in `themes/` from the corresponding catppuccin repo.
+The CLI toolchain is [catppuccin](https://github.com/catppuccin) **mocha**: starship (official catppuccin-powerline preset), bat, fzf, delta, lazygit, btop, eza, tmux, tealdeer. To change flavor: edit `palette =` in `starship/starship.toml` and swap the vendored files in `themes/` from the corresponding catppuccin repo.
 
-iTerm2 needs a one-time manual setup (its settings aren't file-based): Settings > Profiles > Colors > Color Presets > Import > `themes/iterm/catppuccin-mocha.itermcolors`, and Settings > Profiles > Text > Font > **JetBrainsMono Nerd Font** (needed for the prompt icons).
+The terminal itself runs **Dracula+** - it pairs surprisingly well with the catppuccin prompt, since starship colors are truecolor and independent of the terminal scheme. iTerm2 needs a one-time manual setup (its settings aren't file-based): Settings > Profiles > Colors > Color Presets > Import > `themes/iterm/dracula-plus.itermcolors` (or `catppuccin-mocha.itermcolors` for an all-catppuccin look), and Settings > Profiles > Text > Font > **JetBrainsMono Nerd Font** (needed for the prompt icons).
 
 ## Updating
 

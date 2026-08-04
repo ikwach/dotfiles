@@ -261,7 +261,8 @@ info "Next steps:"
 echo "  1. Restart your terminal"
 if [[ "$OS" == "macos" ]]; then
   echo "  2. iTerm2 theme: Settings > Profiles > Colors > Color Presets > Import"
-  echo "     -> $DOTFILES_DIR/themes/iterm/catppuccin-mocha.itermcolors"
+  echo "     -> $DOTFILES_DIR/themes/iterm/dracula-plus.itermcolors"
+  echo "     (catppuccin-mocha.itermcolors is there too if you prefer)"
   echo "     then Settings > Profiles > Text > Font -> JetBrainsMono Nerd Font"
 else
   echo "  2. Set your terminal font to JetBrainsMono Nerd Font"
