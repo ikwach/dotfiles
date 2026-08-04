@@ -1,0 +1,51 @@
+name: install
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  corporate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Run installer (corporate mode)
+        run: ./install.sh corporate
+
+      - name: Verify installation
+        run: |
+          for brew_bin in /opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew" /usr/local/bin/brew; do
+            [ -x "$brew_bin" ] && eval "$("$brew_bin" shellenv)" && break
+          done
+          starship --version
+          bat --version
+          eza --version
+          rg --version
+          zoxide --version
+          atuin --version
+          mise --version
+          delta --version
+          zsh -n zsh/.zshrc
+          test -L "$HOME/.zshrc"
+          test -L "$HOME/.config/starship.toml"
+          test -L "$HOME/.gitconfig"
+          test -f "$HOME/.secrets.env"
+          mode="$(stat -c '%a' "$HOME/.secrets.env" 2>/dev/null || stat -f '%Lp' "$HOME/.secrets.env")"
+          [ "$mode" = "600" ] || { echo "secrets file mode is $mode, expected 600"; exit 1; }
+
+      - name: Parse all manifests (personal mode is not installed in CI)
+        if: runner.os == 'macOS'
+        run: |
+          eval "$(/opt/homebrew/bin/brew shellenv)"
+          cat Brewfile.core Brewfile.macos Brewfile.personal | brew bundle list --file=- --all >/dev/null
+          echo "all Brewfiles parse"
+
+      - name: Verify idempotency (second run)
+        run: ./install.sh corporate

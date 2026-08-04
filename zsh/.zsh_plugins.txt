@@ -1,14 +1,14 @@
-# .zsh_plugins.txt
-# comments are supported like this
-zsh-users/zsh-completions
-# empty lines are skipped
-# annotations are also allowed:
-romkatv/zsh-bench kind:path
-olets/zsh-abbr kind:defer
-# frameworks like oh-my-zsh are supported
-ohmyzsh/ohmyzsh path:lib
-ohmyzsh/ohmyzsh path:plugins/colored-man-pages
-# popular fish-like plugins
-#mattmc3/zfunctions
+# Antidote plugin list - https://antidote.sh
+# After editing, restart the shell (antidote re-bundles automatically).
+
+# Handles compinit with caching; must load before completion consumers
+mattmc3/ez-compinit
+
+# Extra completions, added to fpath before compinit runs
+zsh-users/zsh-completions kind:fpath path:src
+
+# Fish-like inline suggestions from history
 zsh-users/zsh-autosuggestions
-zdharma-continuum/fast-syntax-highlighting kind:defer
+
+# Syntax highlighting - keep last
+zdharma-continuum/fast-syntax-highlighting

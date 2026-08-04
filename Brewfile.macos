@@ -1,0 +1,8 @@
+# Brewfile.macos - macOS-only entries, installed in both modes on macOS.
+# On Linux this file is skipped; the nerd font is installed from the
+# nerd-fonts GitHub release instead (see install.sh).
+
+brew "mas"            # Mac App Store CLI
+
+cask "iterm2"
+cask "font-jetbrains-mono-nerd-font"  # required for prompt icons

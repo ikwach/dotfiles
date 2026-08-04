@@ -1,0 +1,24 @@
+# Brewfile.personal - extras installed ONLY in personal mode.
+# On Linux the cask lines are skipped (see install.sh); install those
+# apps through their vendor instructions instead.
+
+# --- AI tooling ---
+cask "claude-code"    # Claude Code CLI
+cask "claude"         # Claude desktop app
+
+# --- Cloud & deploy ---
+cask "gcloud-cli"     # Google Cloud SDK
+brew "cloud-sql-proxy"
+brew "firebase-cli"
+brew "vercel"
+tap "supabase/tap"
+brew "supabase/tap/supabase"
+
+# --- Media & documents ---
+brew "ffmpeg"
+brew "yt-dlp"
+brew "pandoc"
+
+# --- Utilities ---
+brew "rclone"         # cloud storage sync
+cask "1password-cli"  # op - secrets from 1Password
