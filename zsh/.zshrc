@@ -4,8 +4,11 @@
 
 # Homebrew on Linux: most Linux terminals start non-login shells, which
 # skip ~/.zprofile, so put brew on PATH here as well
+# (~/.linuxbrew is the installer's fallback when sudo is unavailable)
 if [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+elif [[ -x "$HOME/.linuxbrew/bin/brew" ]]; then
+  eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
 fi
 
 export XDG_CONFIG_HOME="$HOME/.config"

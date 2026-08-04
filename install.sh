@@ -71,7 +71,8 @@ if ! command -v brew >/dev/null 2>&1; then
 fi
 
 # Make brew available in this script and in future login shells
-for brew_bin in /opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew /usr/local/bin/brew; do
+# ($HOME/.linuxbrew is the installer's fallback when sudo is unavailable)
+for brew_bin in /opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew" /usr/local/bin/brew; do
   if [[ -x "$brew_bin" ]]; then
     eval "$("$brew_bin" shellenv)"
     grep -q 'brew shellenv' "$HOME/.zprofile" 2>/dev/null || \
@@ -269,6 +270,11 @@ fi
 echo "  3. Runtime versions:    mise use -g node@lts"
 echo "  4. Import history:      atuin import zsh"
 if [[ "$MODE" == "personal" ]]; then
-  echo "  5. Sign in:             claude   /   gcloud auth login   /   op signin"
+  if [[ "$OS" == "macos" ]]; then
+    echo "  5. Sign in:             claude   /   gcloud auth login   /   op signin"
+  else
+    echo "  5. Casks are macOS-only: install Claude Code, gcloud and the"
+    echo "     1Password CLI from their vendor instructions, then sign in"
+  fi
 fi
 echo ""
