@@ -54,3 +54,33 @@ jobs:
         run: |
           test -f nvim/lazy-lock.json
           test -d "$HOME/.local/share/nvim/lazy/lazy.nvim"
+
+  # Personal mode on Linux was previously only parse-checked, which is why
+  # linux-extras.sh could ship with an unattended-gpg hang nobody would hit
+  # until a real install. This actually runs it: the apt repositories, the
+  # signing keys and the second-run path.
+  #
+  # Linux only -- the macOS half of personal mode is casks, which need a real
+  # session and are not worth a runner.
+  personal-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Run installer via bootstrap (personal mode)
+        run: ./bootstrap.sh personal
+
+      - name: Verify the cask-equivalent tools actually installed
+        run: |
+          for brew_bin in /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew"; do
+            [ -x "$brew_bin" ] && eval "$("$brew_bin" shellenv)" && break
+          done
+          # Claude Code goes to ~/.local/bin, which is not on PATH under bash
+          test -x "$HOME/.local/bin/claude" || { echo "Claude Code missing"; exit 1; }
+          gcloud --version >/dev/null || { echo "gcloud missing"; exit 1; }
+          op --version    >/dev/null || { echo "1Password CLI missing"; exit 1; }
+          echo "all personal-mode Linux tools present"
+
+      - name: Rerun (keyrings already exist -- catches unattended-gpg prompts)
+        run: timeout 900 ./bootstrap.sh personal

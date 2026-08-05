@@ -27,6 +27,21 @@ case "$OSTYPE" in
   *)       fail "Unsupported OS: $OSTYPE" ;;
 esac
 
+# The documented install is `curl ... | bash -s -- personal`, where stdin is the
+# curl pipe for the whole run -- so `[[ -t 0 ]]` is false even with a user sat
+# right there. Ask the terminal directly instead. Anything that prompts must use
+# this and read from /dev/tty, or it silently takes the non-interactive path on
+# the exact command the README recommends.
+#
+# Actually open /dev/tty rather than just testing that it exists: on CI runners
+# and in containers the device node is present but has no controlling terminal,
+# so the open fails -- and a failed redirect on `read` would abort the whole
+# installer under `set -e`.
+have_tty() {
+  [[ -t 0 ]] && return 0
+  (exec 3</dev/tty) 2>/dev/null
+}
+
 # ----------------------------------------
 # Mode selection
 # ----------------------------------------
@@ -43,11 +58,11 @@ for arg in "$@"; do
   esac
 done
 if [[ -z "$MODE" ]]; then
-  if [[ -t 0 ]]; then
+  if have_tty; then
     echo "Select installation mode:"
     echo "  1) personal   - everything: core tools + AI, cloud, media"
     echo "  2) corporate  - restricted: core CLI tools only"
-    read -rp "Mode [1/2]: " choice
+    read -rp "Mode [1/2]: " choice </dev/tty
     case "$choice" in
       1) MODE="personal" ;;
       2) MODE="corporate" ;;
@@ -87,8 +102,22 @@ fi
 for brew_bin in /opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew" /usr/local/bin/brew; do
   if [[ -x "$brew_bin" ]]; then
     eval "$("$brew_bin" shellenv)"
-    grep -q 'brew shellenv' "$HOME/.zprofile" 2>/dev/null || \
-      echo "eval \"\$($brew_bin shellenv)\"" >> "$HOME/.zprofile"
+    shellenv_line="eval \"\$($brew_bin shellenv)\""
+    # Match this exact brew, not any 'brew shellenv' line. Migrating Intel ->
+    # ARM (/usr/local -> /opt/homebrew), or /home/linuxbrew -> ~/.linuxbrew,
+    # otherwise leaves the stale line in place and never adds the right one,
+    # producing a broken login shell that re-running cannot repair.
+    if ! grep -qxF "$shellenv_line" "$HOME/.zprofile" 2>/dev/null; then
+      # Drop any shellenv line pointing at a different prefix.
+      if [[ -f "$HOME/.zprofile" ]] && grep -q 'brew shellenv' "$HOME/.zprofile"; then
+        cp "$HOME/.zprofile" "$HOME/.zprofile.bak-$(date +%Y%m%d-%H%M%S)"
+        grep -v 'brew shellenv' "$HOME/.zprofile" > "$HOME/.zprofile.tmp" && mv "$HOME/.zprofile.tmp" "$HOME/.zprofile"
+        warning "Replaced a stale brew shellenv line in ~/.zprofile (backed up)"
+      fi
+      # printf, not echo: a file with no trailing newline would otherwise get
+      # this appended to its last line, silently corrupting both.
+      printf '\n%s\n' "$shellenv_line" >> "$HOME/.zprofile"
+    fi
     break
   fi
 done
@@ -137,6 +166,18 @@ link() {
     mkdir -p "$BACKUP_DIR/$(dirname "$rel")"
     cp -r "$target" "$BACKUP_DIR/$rel" || fail "Could not back up $target, aborting before overwriting it"
     rm -rf "$target"
+  elif [[ -L "$target" ]]; then
+    # An existing symlink is someone else's config -- stow, chezmoi, another
+    # dotfiles repo. ln -sfn would replace it with nothing recorded, so note
+    # where it pointed. The link itself is cheap to recreate; knowing the
+    # target is the part that is lost otherwise.
+    local current rel
+    current="$(readlink "$target")"
+    if [[ "$current" != "$source" ]]; then
+      rel="${target#"$HOME"/}"
+      mkdir -p "$BACKUP_DIR"
+      printf '%s -> %s\n' "$rel" "$current" >> "$BACKUP_DIR/replaced-symlinks.txt"
+    fi
   fi
   mkdir -p "$(dirname "$target")"
   ln -sfn "$source" "$target"
@@ -175,7 +216,13 @@ mkdir -p "$HOME/.local/bin"
 for script in "$DOTFILES_DIR"/bin/*; do
   [[ -f "$script" ]] || continue
   name="$(basename "$script")"
-  [[ "$MODE" == "corporate" && "$name" == "gifenc" ]] && continue
+  # gifenc needs ffmpeg, which only personal mode installs. Switching
+  # personal -> corporate must remove the link, not just skip creating it,
+  # or a live symlink to a broken script survives the mode change.
+  if [[ "$MODE" == "corporate" && "$name" == "gifenc" ]]; then
+    [[ -L "$HOME/.local/bin/$name" ]] && rm -f "$HOME/.local/bin/$name"
+    continue
+  fi
   ln -sfn "$script" "$HOME/.local/bin/$name"
 done
 success "Linked bin/ scripts to ~/.local/bin"
@@ -232,12 +279,17 @@ fi
 
 if [[ ! -f "$HOME/.gitconfig.local" ]]; then
   info "Setting up git identity (${MODE} mode)..."
-  if [[ -t 0 ]]; then
-    read -rp "Git name: " git_name
+  # Read from /dev/tty, not stdin: on the piped bootstrap path stdin is the
+  # script itself. Without this the prompt is skipped, no ~/.gitconfig.local is
+  # written, and since git/.gitconfig includes it unconditionally git falls back
+  # to a guessed user@hostname -- committing under a wrong identity rather than
+  # failing loudly.
+  if have_tty; then
+    read -rp "Git name: " git_name </dev/tty
     if [[ "$MODE" == "corporate" ]]; then
-      read -rp "Git email (use your WORK email): " git_email
+      read -rp "Git email (use your WORK email): " git_email </dev/tty
     else
-      read -rp "Git email: " git_email
+      read -rp "Git email: " git_email </dev/tty
     fi
     printf '[user]\n\tname = %s\n\temail = %s\n' "$git_name" "$git_email" > "$HOME/.gitconfig.local"
     success "Wrote ~/.gitconfig.local"
@@ -280,10 +332,19 @@ if [[ ! -f "$HOME/.config/btop/btop.conf" ]]; then
   success "btop config created"
 fi
 
-if [[ ! -d "$HOME/.tmux/plugins/tpm" ]]; then
+# Test for the .git directory, not the directory itself: an interrupted clone
+# leaves an empty or partial directory that would skip this forever, the same
+# trap as the nerd font check. bootstrap.sh already tests .git this way.
+if [[ ! -d "$HOME/.tmux/plugins/tpm/.git" ]]; then
   info "Installing tmux plugin manager..."
-  git clone --depth 1 https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
-  success "TPM installed (prefix + I inside tmux installs plugins)"
+  rm -rf "$HOME/.tmux/plugins/tpm"
+  # Guarded like every other network call here: a proxy or a GitHub blip should
+  # not abort the installer before mise, Neovim, the extras and chsh.
+  if git clone --depth 1 https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"; then
+    success "TPM installed (prefix + I inside tmux installs plugins)"
+  else
+    warning "Could not clone TPM; tmux will install it on first launch"
+  fi
 fi
 
 if command -v tldr >/dev/null 2>&1; then
