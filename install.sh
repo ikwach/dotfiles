@@ -37,10 +37,11 @@ esac
 # and in containers the device node is present but has no controlling terminal,
 # so the open fails -- and a failed redirect on `read` would abort the whole
 # installer under `set -e`.
-have_tty() {
-  [[ -t 0 ]] && return 0
-  (exec 3</dev/tty) 2>/dev/null
-}
+# No `[[ -t 0 ]] && return 0` shortcut: every caller reads from /dev/tty, so
+# what matters is whether that open succeeds, not whether stdin is a terminal.
+# Returning early on the stdin check could green-light a redirect that then
+# fails, aborting the installer under set -e.
+have_tty() { (exec 3</dev/tty) 2>/dev/null; }
 
 # ----------------------------------------
 # Mode selection
@@ -108,10 +109,18 @@ for brew_bin in /opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew "$HOM
     # otherwise leaves the stale line in place and never adds the right one,
     # producing a broken login shell that re-running cannot repair.
     if ! grep -qxF "$shellenv_line" "$HOME/.zprofile" 2>/dev/null; then
-      # Drop any shellenv line pointing at a different prefix.
-      if [[ -f "$HOME/.zprofile" ]] && grep -q 'brew shellenv' "$HOME/.zprofile"; then
-        cp "$HOME/.zprofile" "$HOME/.zprofile.bak-$(date +%Y%m%d-%H%M%S)"
-        grep -v 'brew shellenv' "$HOME/.zprofile" > "$HOME/.zprofile.tmp" && mv "$HOME/.zprofile.tmp" "$HOME/.zprofile"
+      # Drop a shellenv line pointing at a different prefix. Anchored to the
+      # exact shape the installer writes, so a line a user wrote themselves that
+      # merely mentions "brew shellenv" is left alone.
+      stale_re='^[[:space:]]*eval "\$\(.*brew shellenv\)"[[:space:]]*$'
+      if [[ -f "$HOME/.zprofile" ]] && grep -qE "$stale_re" "$HOME/.zprofile"; then
+        mkdir -p "$BACKUP_DIR"
+        cp "$HOME/.zprofile" "$BACKUP_DIR/.zprofile"
+        # `grep -v` exits 1 when it filters out every line, which is exactly the
+        # single-line .zprofile the old installer wrote -- so `&& mv` silently
+        # skipped, leaving the stale line and an orphaned .tmp behind.
+        grep -vE "$stale_re" "$HOME/.zprofile" > "$HOME/.zprofile.tmp" || true
+        mv "$HOME/.zprofile.tmp" "$HOME/.zprofile"
         warning "Replaced a stale brew shellenv line in ~/.zprofile (backed up)"
       fi
       # printf, not echo: a file with no trailing newline would otherwise get
@@ -231,7 +240,12 @@ if [[ -f "$HOME/.gitignore_global" ]]; then
   warning "The old ~/.gitignore_global is no longer used; global ignores now live in ~/.config/git/ignore"
 fi
 
-[[ -d "$BACKUP_DIR" ]] && info "Previous configs backed up to $BACKUP_DIR"
+# Only claim a backup when something other than the symlink ledger is in there.
+if [[ -d "$BACKUP_DIR" ]] && [[ -n "$(find "$BACKUP_DIR" -mindepth 1 ! -name 'replaced-symlinks.txt' -print -quit)" ]]; then
+  info "Previous configs backed up to $BACKUP_DIR"
+fi
+[[ -f "$BACKUP_DIR/replaced-symlinks.txt" ]] && \
+  info "Replaced symlinks recorded in $BACKUP_DIR/replaced-symlinks.txt"
 
 # ----------------------------------------
 # Nerd Font (Linux; macOS gets it as a cask)
@@ -264,13 +278,17 @@ fi
 # installing font files and configuring the terminal are independent, and
 # fontconfig is only apt-installed when Homebrew was missing -- so a machine
 # that already had brew would otherwise never get its terminal configured.
+# Exit code matters here: 0 configured, 1 failed, 2 nothing to configure.
+# Treating any non-failure as success reported "Terminal font is configured" on
+# headless boxes that had printed "No supported terminal found" moments earlier.
 TERMINAL_CONFIGURED=0
 if [[ "$OS" == "linux" && -x "$DOTFILES_DIR/linux-terminal.sh" ]]; then
-  if "$DOTFILES_DIR/linux-terminal.sh"; then
-    TERMINAL_CONFIGURED=1
-  else
-    warning "Terminal font setup failed; set it manually"
-  fi
+  "$DOTFILES_DIR/linux-terminal.sh" && terminal_rc=0 || terminal_rc=$?
+  case "$terminal_rc" in
+    0) TERMINAL_CONFIGURED=1 ;;
+    2) : ;;   # nothing to configure; next-steps tells the user what to set
+    *) warning "Terminal font setup failed; set it manually" ;;
+  esac
 fi
 
 # ----------------------------------------
@@ -337,7 +355,13 @@ fi
 # trap as the nerd font check. bootstrap.sh already tests .git this way.
 if [[ ! -d "$HOME/.tmux/plugins/tpm/.git" ]]; then
   info "Installing tmux plugin manager..."
-  rm -rf "$HOME/.tmux/plugins/tpm"
+  # Move a non-git tpm aside rather than deleting it: it may be a tarball or
+  # package install rather than a half-finished clone.
+  if [[ -e "$HOME/.tmux/plugins/tpm" ]]; then
+    mkdir -p "$BACKUP_DIR/.tmux/plugins"
+    mv "$HOME/.tmux/plugins/tpm" "$BACKUP_DIR/.tmux/plugins/tpm"
+    warning "Moved an existing non-git tpm to $BACKUP_DIR"
+  fi
   # Guarded like every other network call here: a proxy or a GitHub blip should
   # not abort the installer before mise, Neovim, the extras and chsh.
   if git clone --depth 1 https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"; then
@@ -449,7 +473,11 @@ if [[ "$MODE" == "personal" ]]; then
   command -v gcloud >/dev/null 2>&1 && signins+=("gcloud auth login")
   command -v op     >/dev/null 2>&1 && signins+=("op signin")
   if [[ ${#signins[@]} -gt 0 ]]; then
-    echo "  4. Sign in:             $(IFS=' / '; echo "${signins[*]}")"
+    # "${arr[*]}" joins on the FIRST character of IFS only, so IFS=' / ' gave
+    # "claude gcloud auth login op signin" -- unreadable, since the entries
+    # themselves contain spaces.
+    printf -v joined '%s / ' "${signins[@]}"
+    echo "  4. Sign in:             ${joined% / }"
   fi
   if [[ "$OS" == "linux" ]]; then
     echo "     Claude desktop app: https://code.claude.com/docs/en/desktop-linux"

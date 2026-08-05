@@ -22,10 +22,16 @@ if [ -z "$out" ]; then
   out="${in%.*}.gif"
 fi
 
-# mktemp, not a fixed /tmp/palette.png: that raced between concurrent runs and
-# was a predictable-name write in a shared directory on multi-user machines.
-palette="$(mktemp -t gifenc-palette.XXXXXX.png)"
-trap 'rm -f "$palette"' EXIT INT TERM
+# A private directory, not `mktemp -t <template>`: GNU substitutes the X's and
+# keeps the .png suffix, but BSD/macOS treats the whole argument as a prefix and
+# appends its own suffix, leaving a file that does not end in .png -- ffmpeg
+# infers the palettegen muxer from the extension, so it would fail there.
+# A fixed name inside a private directory sidesteps the difference, and also
+# fixes the original /tmp/palette.png, which raced between concurrent runs and
+# was a predictable-name write on multi-user machines.
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT INT TERM
+palette="$tmpdir/palette.png"
 
 fps=${FPS:-30}
 filters="fps=$fps,scale=500:-1:flags=lanczos"

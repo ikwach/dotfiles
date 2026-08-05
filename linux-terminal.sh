@@ -17,8 +17,12 @@
 #
 # Supported: Ptyxis (Ubuntu 25.10+ default), GNOME Terminal, Console/Kgx.
 #
-# Exit 0 when everything worked or there was nothing to do (headless, CI).
-# Exit 1 only if a terminal was found and setting its font actually failed.
+# Exit codes, so the caller can tell the three states apart rather than reading
+# "not a failure" as "configured":
+#   0  a terminal now has a nerd font
+#   1  a terminal was found but setting its font failed
+#   2  nothing to configure (no gsettings, no supported terminal, or the user's
+#      own font is kept and may not be a nerd font)
 set -uo pipefail
 
 FONT="${DOTFILES_TERMINAL_FONT:-JetBrainsMono Nerd Font Mono 12}"
@@ -30,7 +34,7 @@ warning() { echo -e "\033[1;33m[!]\033[0m $1"; }
 
 if ! command -v gsettings >/dev/null 2>&1; then
   info "gsettings not available; skipping terminal font setup"
-  exit 0
+  exit 2
 fi
 
 failures=0
@@ -69,7 +73,14 @@ apply() {
       current="$(gsettings get "$schema" "$font_key" 2>/dev/null | tr -d "\"'")"
       info "$label already set to '$current'; leaving it alone"
       info "  override with: DOTFILES_TERMINAL_FONT='$FONT' $0"
-      configured=1
+      # Only count it as configured if that font can actually draw the prompt.
+      # Otherwise we would keep the user's choice and then report success while
+      # the powerline glyphs still render as tofu.
+      if [[ "$current" == *[Nn]erd* ]]; then
+        configured=1
+      else
+        warning "  '$current' does not look like a Nerd Font; prompt icons may not render"
+      fi
       return 0
     fi
   fi
@@ -109,14 +120,18 @@ fi
 # they differ from what we expect on a given version.
 has_schema org.gnome.Console && apply "GNOME Console" org.gnome.Console use-system-font custom-font
 
-if [[ "$configured" -eq 0 && "$failures" -eq 0 ]]; then
-  warning "No supported terminal found. Set your terminal font to: $FONT"
+if [[ "$failures" -gt 0 ]]; then
+  exit 1
+fi
+
+if [[ "$configured" -eq 0 ]]; then
+  warning "No terminal configured with a Nerd Font. Set your terminal font to: $FONT"
+  exit 2
 fi
 
 # A running terminal caches fontconfig at startup, so a newly installed font is
 # invisible to it until the process fully restarts -- a new tab or window in the
 # same process is not enough. Worth saying, because it looks like the font
 # simply failed to install.
-[[ "$configured" -eq 1 ]] && info "Fully quit and reopen your terminal for the font to take effect"
-
-exit $(( failures > 0 ? 1 : 0 ))
+info "Fully quit and reopen your terminal for the font to take effect"
+exit 0
