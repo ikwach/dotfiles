@@ -330,8 +330,15 @@ if [[ "$WITH_MAC_KEYS" == 1 && "$OS" == "linux" ]]; then
 fi
 
 # $SHELL reflects the shell that happens to be running, which is not the login
-# shell inside editors, CI or a nested bash. Read the passwd entry instead.
-LOGIN_SHELL="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)"
+# shell inside editors, CI or a nested bash. Read the account record instead --
+# getent on Linux, dscl on macOS, which has no getent. Both are guarded because
+# a missing command would otherwise take the whole script down under `set -e`.
+LOGIN_SHELL=""
+if command -v getent >/dev/null 2>&1; then
+  LOGIN_SHELL="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)" || LOGIN_SHELL=""
+elif command -v dscl >/dev/null 2>&1; then
+  LOGIN_SHELL="$(dscl . -read "/Users/$(id -un)" UserShell 2>/dev/null | awk '{print $2}')" || LOGIN_SHELL=""
+fi
 LOGIN_SHELL="${LOGIN_SHELL:-$SHELL}"
 if [[ "$LOGIN_SHELL" != *zsh ]] && command -v zsh >/dev/null 2>&1; then
   info "Setting zsh as default shell (currently $LOGIN_SHELL)..."
