@@ -70,8 +70,11 @@ echo ""
 if ! command -v brew >/dev/null 2>&1; then
   if [[ "$OS" == "linux" ]] && command -v apt-get >/dev/null 2>&1; then
     info "Installing Homebrew build dependencies via apt..."
+    # gnupg is not a Homebrew dependency, but linux-extras.sh needs it to
+    # dearmor the gcloud and 1Password repository keys, and minimal images
+    # do not ship it.
     if ! (sudo apt-get update -qq && sudo apt-get install -y -qq \
-        build-essential procps curl file git zsh fontconfig); then
+        build-essential procps curl file git zsh fontconfig gnupg); then
       warning "apt dependencies failed; Homebrew install may not work"
     fi
   fi
@@ -208,11 +211,18 @@ if [[ "$OS" == "linux" ]] && command -v fc-cache >/dev/null 2>&1; then
   else
     success "Nerd Font already installed"
   fi
+fi
 
-  # Point the terminal at it. macOS gets the equivalent via the iTerm2 dynamic
-  # profile; without this, Linux leaves the prompt as tofu until set by hand.
-  if [[ -x "$DOTFILES_DIR/linux-terminal.sh" ]]; then
-    "$DOTFILES_DIR/linux-terminal.sh" || warning "Terminal font setup failed; set it manually"
+# Point the terminal at the font. Deliberately outside the fc-cache check above:
+# installing font files and configuring the terminal are independent, and
+# fontconfig is only apt-installed when Homebrew was missing -- so a machine
+# that already had brew would otherwise never get its terminal configured.
+TERMINAL_CONFIGURED=0
+if [[ "$OS" == "linux" && -x "$DOTFILES_DIR/linux-terminal.sh" ]]; then
+  if "$DOTFILES_DIR/linux-terminal.sh"; then
+    TERMINAL_CONFIGURED=1
+  else
+    warning "Terminal font setup failed; set it manually"
   fi
 fi
 
@@ -340,11 +350,13 @@ elif command -v dscl >/dev/null 2>&1; then
   LOGIN_SHELL="$(dscl . -read "/Users/$(id -un)" UserShell 2>/dev/null | awk '{print $2}')" || LOGIN_SHELL=""
 fi
 LOGIN_SHELL="${LOGIN_SHELL:-$SHELL}"
-if [[ "$LOGIN_SHELL" != *zsh ]] && command -v zsh >/dev/null 2>&1; then
+if [[ "$LOGIN_SHELL" == *zsh ]]; then
+  success "Login shell already zsh"
+elif command -v zsh >/dev/null 2>&1; then
   info "Setting zsh as default shell (currently $LOGIN_SHELL)..."
   chsh -s "$(command -v zsh)" || warning "Could not change the default shell; run chsh manually"
 else
-  success "Login shell already zsh"
+  warning "zsh is not installed; login shell left as $LOGIN_SHELL"
 fi
 
 # ----------------------------------------
@@ -359,14 +371,25 @@ echo "  1. Restart your terminal"
 if [[ "$OS" == "macos" ]]; then
   echo "  2. iTerm2: Settings > Profiles > 'dotfiles' > Other Actions > Set as Default"
   echo "     (Dracula+ colors and the nerd font are baked into the profile)"
+elif [[ "$TERMINAL_CONFIGURED" == 1 ]]; then
+  echo "  2. Terminal font is configured. Quit the terminal completely and reopen"
+  echo "     -- a new tab is not enough, since a running terminal caches the font"
+  echo "     list from startup."
 else
-  echo "  2. Terminal font was set automatically (Ptyxis / GNOME Terminal / Console)."
-  echo "     Quit the terminal completely and reopen -- a new tab is not enough,"
-  echo "     since a running terminal caches the font list from startup."
+  echo "  2. Set your terminal font to JetBrainsMono Nerd Font"
 fi
 echo "  3. Import history:      atuin import zsh"
 if [[ "$MODE" == "personal" ]]; then
-  echo "  4. Sign in:             claude   /   gcloud auth login   /   op signin"
+  # Only name tools that are actually here: on Linux the apt-based ones are
+  # skipped when sudo is unavailable, and telling someone to run a command
+  # they do not have is worse than saying nothing.
+  signins=()
+  { command -v claude >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/claude" ]]; } && signins+=("claude")
+  command -v gcloud >/dev/null 2>&1 && signins+=("gcloud auth login")
+  command -v op     >/dev/null 2>&1 && signins+=("op signin")
+  if [[ ${#signins[@]} -gt 0 ]]; then
+    echo "  4. Sign in:             $(IFS=' / '; echo "${signins[*]}")"
+  fi
   if [[ "$OS" == "linux" ]]; then
     echo "     Claude desktop app: https://code.claude.com/docs/en/desktop-linux"
   fi
