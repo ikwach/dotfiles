@@ -189,7 +189,10 @@ fi
 
 if [[ "$OS" == "linux" ]] && command -v fc-cache >/dev/null 2>&1; then
   FONT_DIR="$HOME/.local/share/fonts/JetBrainsMonoNerdFont"
-  if [[ ! -d "$FONT_DIR" ]]; then
+  # Check for actual font files, not just the directory: if a previous run
+  # created the directory and then failed to extract, testing -d alone would
+  # skip the install forever and leave the prompt rendering as tofu.
+  if ! compgen -G "$FONT_DIR/*.ttf" >/dev/null 2>&1; then
     info "Installing JetBrains Mono Nerd Font..."
     font_tmp="$(mktemp -d)"
     if curl -fsSL -o "$font_tmp/JetBrainsMono.tar.xz" \
@@ -197,11 +200,19 @@ if [[ "$OS" == "linux" ]] && command -v fc-cache >/dev/null 2>&1; then
         && mkdir -p "$FONT_DIR" \
         && tar -xJf "$font_tmp/JetBrainsMono.tar.xz" -C "$FONT_DIR"; then
       fc-cache -f "$FONT_DIR" >/dev/null || true
-      success "Nerd Font installed (set it in your terminal profile)"
+      success "Nerd Font installed"
     else
       warning "Font download failed; install a Nerd Font manually for prompt icons"
     fi
     rm -rf "$font_tmp"
+  else
+    success "Nerd Font already installed"
+  fi
+
+  # Point the terminal at it. macOS gets the equivalent via the iTerm2 dynamic
+  # profile; without this, Linux leaves the prompt as tofu until set by hand.
+  if [[ -x "$DOTFILES_DIR/linux-terminal.sh" ]]; then
+    "$DOTFILES_DIR/linux-terminal.sh" || warning "Terminal font setup failed; set it manually"
   fi
 fi
 
@@ -293,6 +304,14 @@ if command -v nvim >/dev/null 2>&1; then
   success "Neovim ready"
 fi
 
+# Personal mode on macOS installs Claude Code, gcloud and the 1Password CLI as
+# casks. Those lines are stripped on Linux, so install the same tools from the
+# vendors' Linux channels to keep the two platforms at parity.
+if [[ "$MODE" == "personal" && "$OS" == "linux" && -x "$DOTFILES_DIR/linux-extras.sh" ]]; then
+  info "Installing personal-mode tools that are casks on macOS..."
+  "$DOTFILES_DIR/linux-extras.sh" || warning "Some Linux extras failed; see the output above"
+fi
+
 if [[ "$WITH_MACOS_DEFAULTS" == 1 && "$OS" == "macos" ]]; then
   info "Applying macOS defaults..."
   if "$DOTFILES_DIR/macos.sh"; then success "macOS defaults applied"; else warning "macos.sh failed"; fi
@@ -310,9 +329,15 @@ if [[ "$WITH_MAC_KEYS" == 1 && "$OS" == "linux" ]]; then
   fi
 fi
 
-if [[ "$SHELL" != *zsh ]] && command -v zsh >/dev/null 2>&1; then
-  info "Setting zsh as default shell..."
+# $SHELL reflects the shell that happens to be running, which is not the login
+# shell inside editors, CI or a nested bash. Read the passwd entry instead.
+LOGIN_SHELL="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)"
+LOGIN_SHELL="${LOGIN_SHELL:-$SHELL}"
+if [[ "$LOGIN_SHELL" != *zsh ]] && command -v zsh >/dev/null 2>&1; then
+  info "Setting zsh as default shell (currently $LOGIN_SHELL)..."
   chsh -s "$(command -v zsh)" || warning "Could not change the default shell; run chsh manually"
+else
+  success "Login shell already zsh"
 fi
 
 # ----------------------------------------
@@ -328,16 +353,15 @@ if [[ "$OS" == "macos" ]]; then
   echo "  2. iTerm2: Settings > Profiles > 'dotfiles' > Other Actions > Set as Default"
   echo "     (Dracula+ colors and the nerd font are baked into the profile)"
 else
-  echo "  2. Set your terminal font to JetBrainsMono Nerd Font"
-  echo "     (GNOME Terminal catppuccin: github.com/catppuccin/gnome-terminal)"
+  echo "  2. Terminal font was set automatically (Ptyxis / GNOME Terminal / Console)."
+  echo "     Quit the terminal completely and reopen -- a new tab is not enough,"
+  echo "     since a running terminal caches the font list from startup."
 fi
 echo "  3. Import history:      atuin import zsh"
 if [[ "$MODE" == "personal" ]]; then
-  if [[ "$OS" == "macos" ]]; then
-    echo "  4. Sign in:             claude   /   gcloud auth login   /   op signin"
-  else
-    echo "  4. Casks are macOS-only: install Claude Code, gcloud and the"
-    echo "     1Password CLI from their vendor instructions, then sign in"
+  echo "  4. Sign in:             claude   /   gcloud auth login   /   op signin"
+  if [[ "$OS" == "linux" ]]; then
+    echo "     Claude desktop app: https://code.claude.com/docs/en/desktop-linux"
   fi
 fi
 echo ""
