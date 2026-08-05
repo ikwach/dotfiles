@@ -68,6 +68,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # ubuntu-latest ships the Google Cloud CLI preinstalled, so
+      # linux-extras.sh short-circuits on `command -v gcloud` and its own
+      # install path -- dearmor, sources.list, apt install -- never runs. The
+      # job then "verified" gcloud against the runner's copy, leaving the code
+      # that carried the unattended-gpg bug untested by the job meant to test it.
+      - name: Drop the runner's preinstalled gcloud so the installer's path runs
+        run: |
+          sudo apt-get remove -y google-cloud-cli || true
+          sudo rm -f /usr/share/keyrings/cloud.google.gpg \
+                     /etc/apt/sources.list.d/google-cloud-sdk.list
+          ! command -v gcloud
+
       - name: Run installer via bootstrap (personal mode)
         run: ./bootstrap.sh personal
 
@@ -80,7 +92,13 @@ jobs:
           test -x "$HOME/.local/bin/claude" || { echo "Claude Code missing"; exit 1; }
           gcloud --version >/dev/null || { echo "gcloud missing"; exit 1; }
           op --version    >/dev/null || { echo "1Password CLI missing"; exit 1; }
-          echo "all personal-mode Linux tools present"
+          # Assert the keyrings the installer writes, so a future runner image
+          # preinstalling one of these cannot hollow this job out silently.
+          test -f /usr/share/keyrings/cloud.google.gpg \
+            || { echo "gcloud keyring missing -- installer path did not run"; exit 1; }
+          test -f /usr/share/keyrings/1password-archive-keyring.gpg \
+            || { echo "1Password keyring missing -- installer path did not run"; exit 1; }
+          echo "all personal-mode Linux tools installed by our own code path"
 
       # Removing the packages while LEAVING the keyrings in place is what makes
       # this exercise gpg at all. A plain rerun short-circuits on

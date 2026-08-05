@@ -356,18 +356,29 @@ fi
 if [[ ! -d "$HOME/.tmux/plugins/tpm/.git" ]]; then
   info "Installing tmux plugin manager..."
   # Move a non-git tpm aside rather than deleting it: it may be a tarball or
-  # package install rather than a half-finished clone.
+  # package install rather than a half-finished clone. Guarded like the clone
+  # below -- an unguarded mv would abort the installer under set -e before
+  # Neovim, the extras and chsh.
+  tpm_ready=1
   if [[ -e "$HOME/.tmux/plugins/tpm" ]]; then
     mkdir -p "$BACKUP_DIR/.tmux/plugins"
-    mv "$HOME/.tmux/plugins/tpm" "$BACKUP_DIR/.tmux/plugins/tpm"
-    warning "Moved an existing non-git tpm to $BACKUP_DIR"
+    if mv "$HOME/.tmux/plugins/tpm" "$BACKUP_DIR/.tmux/plugins/tpm"; then
+      warning "Moved an existing non-git tpm to $BACKUP_DIR/.tmux/plugins/tpm"
+    else
+      # The clone would fail anyway with the directory still in place, so skip
+      # it rather than emit a second, more confusing error.
+      warning "Could not move the existing tpm aside; leaving it in place"
+      tpm_ready=0
+    fi
   fi
   # Guarded like every other network call here: a proxy or a GitHub blip should
   # not abort the installer before mise, Neovim, the extras and chsh.
-  if git clone --depth 1 https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"; then
-    success "TPM installed (prefix + I inside tmux installs plugins)"
-  else
-    warning "Could not clone TPM; tmux will install it on first launch"
+  if [[ "$tpm_ready" == 1 ]]; then
+    if git clone --depth 1 https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"; then
+      success "TPM installed (prefix + I inside tmux installs plugins)"
+    else
+      warning "Could not clone TPM; tmux will install it on first launch"
+    fi
   fi
 fi
 

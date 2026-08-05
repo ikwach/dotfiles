@@ -76,7 +76,12 @@ apply() {
       # Only count it as configured if that font can actually draw the prompt.
       # Otherwise we would keep the user's choice and then report success while
       # the powerline glyphs still render as tofu.
-      if [[ "$current" == *[Nn]erd* ]]; then
+      #
+      # Match the " NF" abbreviations too ("MesloLGS NF", "JetBrainsMono NF"):
+      # that is what p10k's font installer and several distro packages call
+      # them, and treating those as non-nerd tells the user to change a font
+      # that is already correct.
+      if [[ "$current" == *[Nn]erd* || "$current" == *" NF" || "$current" == *" NF "* ]]; then
         configured=1
       else
         warning "  '$current' does not look like a Nerd Font; prompt icons may not render"
