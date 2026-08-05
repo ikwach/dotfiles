@@ -74,10 +74,10 @@ command -v mise >/dev/null && eval "$(mise activate zsh)"
 # ========================================
 
 if command -v eza >/dev/null; then
-  alias ls="eza --icons"
-  alias ll="eza --icons -l"
-  alias la="eza --icons -la"
-  alias lt="eza --icons --tree --level=2"
+  alias ls="eza --icons=auto"
+  alias ll="eza --icons=auto -l"
+  alias la="eza --icons=auto -la"
+  alias lt="eza --icons=auto --tree --level=2"
 fi
 
 if command -v bat >/dev/null; then
