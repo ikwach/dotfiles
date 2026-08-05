@@ -16,8 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Run installer (corporate mode)
-        run: ./install.sh corporate
+      - name: Run installer via bootstrap (corporate mode)
+        run: ./bootstrap.sh corporate
 
       - name: Verify installation
         run: |
@@ -48,4 +48,9 @@ jobs:
           echo "all Brewfiles parse"
 
       - name: Verify idempotency (second run)
-        run: ./install.sh corporate
+        run: ./bootstrap.sh corporate
+
+      - name: Verify neovim is pre-baked
+        run: |
+          test -f nvim/lazy-lock.json
+          test -d "$HOME/.local/share/nvim/lazy/lazy.nvim"

@@ -12,6 +12,20 @@ Development environment for macOS and Linux (Debian/Ubuntu) - starship + catppuc
 
 ## Install
 
+On a clean machine, one command does everything (Command Line Tools / apt deps, Homebrew, clone, full setup):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ikwach/dotfiles/master/bootstrap.sh | bash -s -- personal
+```
+
+Minimal Ubuntu images may not ship curl; wget works the same:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/ikwach/dotfiles/master/bootstrap.sh | bash -s -- corporate
+```
+
+Or clone first and run the installer directly:
+
 ```bash
 git clone https://github.com/ikwach/dotfiles.git ~/workspace/dotfiles
 cd ~/workspace/dotfiles
@@ -20,7 +34,14 @@ cd ~/workspace/dotfiles
 ./install.sh corporate   # restricted: core CLI tools only
 ```
 
-The installer is idempotent - rerun it any time. Existing configs are backed up to `~/.dotfiles-backup-<timestamp>` before being replaced with symlinks.
+Optional flags (work with both entry points):
+
+| Flag | Effect |
+|---|---|
+| `--with-macos-defaults` | apply the system settings in `macos.sh` (keyboard repeat, Finder, screenshots folder, tap to click) |
+| `--with-mac-keys` | Linux only: install [Toshy](https://github.com/RedBearAK/toshy) for mac-style keyboard shortcuts |
+
+Everything is idempotent - rerun any time. Existing configs are backed up to `~/.dotfiles-backup-<timestamp>` before being replaced with symlinks. Personal mode also installs node (lts) and go via mise, and neovim plugins and language servers are pre-installed at exact lockfile versions, so the first `nvim` launch is instant. On macOS an iTerm2 dynamic profile named `dotfiles` appears automatically with Dracula+ colors and the nerd font baked in - select it once as your default profile.
 
 ## Modes
 
@@ -44,10 +65,13 @@ Packages come from [Homebrew on Linux](https://docs.brew.sh/Homebrew-on-Linux) o
 ## What's where
 
 ```
+bootstrap.sh         # greenfield entry point (CLT/apt deps, brew, clone, install)
 Brewfile.core        # cross-platform packages for both modes
 Brewfile.macos       # macOS-only: iTerm2, nerd font cask, mas
 Brewfile.personal    # extras for personal mode
 install.sh           # installer (brew, symlinks, git identity, secrets, theme caches)
+macos.sh             # opt-in macOS system defaults (--with-macos-defaults)
+iterm2/              # dynamic profile (Dracula+ colors + nerd font, auto-loaded)
 zsh/                 # .zshrc + antidote plugin list
 starship/            # prompt config (catppuccin mocha powerline)
 git/                 # .gitconfig (identity excluded) + global ignore

@@ -31,7 +31,17 @@ esac
 # Mode selection
 # ----------------------------------------
 
-MODE="${1:-}"
+MODE=""
+WITH_MACOS_DEFAULTS=0
+WITH_MAC_KEYS=0
+for arg in "$@"; do
+  case "$arg" in
+    personal|corporate)     MODE="$arg" ;;
+    --with-macos-defaults)  WITH_MACOS_DEFAULTS=1 ;;
+    --with-mac-keys)        WITH_MAC_KEYS=1 ;;
+    *) fail "Unknown argument: $arg (usage: ./install.sh personal|corporate [--with-macos-defaults] [--with-mac-keys])" ;;
+  esac
+done
 if [[ -z "$MODE" ]]; then
   if [[ -t 0 ]]; then
     echo "Select installation mode:"
@@ -47,7 +57,6 @@ if [[ -z "$MODE" ]]; then
     fail "No mode given. Usage: ./install.sh personal|corporate"
   fi
 fi
-[[ "$MODE" == "personal" || "$MODE" == "corporate" ]] || fail "Unknown mode: $MODE (use personal|corporate)"
 
 echo ""
 info "Mode: $MODE ($OS)"
@@ -153,6 +162,11 @@ link "$DOTFILES_DIR/lazygit/config.yml"                  "$HOME/.config/lazygit/
 link "$DOTFILES_DIR/nvim"                                "$HOME/.config/nvim"
 link "$DOTFILES_DIR/tealdeer/config.toml"                "$TEALDEER_CONFIG"
 
+# iTerm2 picks up dynamic profiles automatically (colors + font, no manual import)
+if [[ "$OS" == "macos" ]]; then
+  link "$DOTFILES_DIR/iterm2/profile.json" "$HOME/Library/Application Support/iTerm2/DynamicProfiles/dotfiles.json"
+fi
+
 # bin/ scripts onto PATH (gifenc needs ffmpeg, which only personal mode installs)
 mkdir -p "$HOME/.local/bin"
 for script in "$DOTFILES_DIR"/bin/*; do
@@ -256,6 +270,46 @@ if command -v tldr >/dev/null 2>&1; then
   tldr --update >/dev/null 2>&1 && success "tldr cache updated"
 fi
 
+# Runtimes for personal machines; corporate boxes may have their own policy
+if [[ "$MODE" == "personal" ]] && command -v mise >/dev/null 2>&1; then
+  info "Installing node (lts) and go (latest) via mise..."
+  if mise use -g node@lts >/dev/null 2>&1; then success "node ready"; else warning "node install via mise failed"; fi
+  if mise use -g go@latest >/dev/null 2>&1; then success "go ready"; else warning "go install via mise failed"; fi
+fi
+
+# Pre-install neovim plugins (exact lockfile versions) and language servers
+# so the first launch is instant instead of a plugin-download storm
+if command -v nvim >/dev/null 2>&1; then
+  info "Preparing Neovim plugins and language servers (can take a few minutes)..."
+  nvim --headless "+Lazy! restore" +qa >/dev/null 2>&1 \
+    || warning "Neovim plugin restore failed; plugins will install on first launch"
+  if command -v mise >/dev/null 2>&1; then
+    mise x -- nvim --headless "+MasonToolsInstallSync" +qa >/dev/null 2>&1 \
+      || warning "Some language servers failed to install; they will retry on demand"
+  else
+    nvim --headless "+MasonToolsInstallSync" +qa >/dev/null 2>&1 \
+      || warning "Some language servers failed to install; they will retry on demand"
+  fi
+  success "Neovim ready"
+fi
+
+if [[ "$WITH_MACOS_DEFAULTS" == 1 && "$OS" == "macos" ]]; then
+  info "Applying macOS defaults..."
+  if "$DOTFILES_DIR/macos.sh"; then success "macOS defaults applied"; else warning "macos.sh failed"; fi
+fi
+
+if [[ "$WITH_MAC_KEYS" == 1 && "$OS" == "linux" ]]; then
+  # Toshy: mac-style keyboard shortcuts (github.com/RedBearAK/toshy)
+  if [[ -t 0 ]]; then
+    info "Installing Toshy (mac-style keyboard shortcuts)..."
+    [[ -d "$HOME/toshy-src" ]] || git clone --depth 1 https://github.com/RedBearAK/toshy.git "$HOME/toshy-src"
+    (cd "$HOME/toshy-src" && ./setup_toshy.py install) \
+      || warning "Toshy install failed; run it manually from ~/toshy-src"
+  else
+    warning "Toshy's installer is interactive; run: git clone https://github.com/RedBearAK/toshy.git && cd toshy && ./setup_toshy.py install"
+  fi
+fi
+
 if [[ "$SHELL" != *zsh ]] && command -v zsh >/dev/null 2>&1; then
   info "Setting zsh as default shell..."
   chsh -s "$(command -v zsh)" || warning "Could not change the default shell; run chsh manually"
@@ -271,21 +325,18 @@ echo ""
 info "Next steps:"
 echo "  1. Restart your terminal"
 if [[ "$OS" == "macos" ]]; then
-  echo "  2. iTerm2 theme: Settings > Profiles > Colors > Color Presets > Import"
-  echo "     -> $DOTFILES_DIR/themes/iterm/dracula-plus.itermcolors"
-  echo "     (catppuccin-mocha.itermcolors is there too if you prefer)"
-  echo "     then Settings > Profiles > Text > Font -> JetBrainsMono Nerd Font"
+  echo "  2. iTerm2: Settings > Profiles > 'dotfiles' > Other Actions > Set as Default"
+  echo "     (Dracula+ colors and the nerd font are baked into the profile)"
 else
   echo "  2. Set your terminal font to JetBrainsMono Nerd Font"
   echo "     (GNOME Terminal catppuccin: github.com/catppuccin/gnome-terminal)"
 fi
-echo "  3. Runtime versions:    mise use -g node@lts"
-echo "  4. Import history:      atuin import zsh"
+echo "  3. Import history:      atuin import zsh"
 if [[ "$MODE" == "personal" ]]; then
   if [[ "$OS" == "macos" ]]; then
-    echo "  5. Sign in:             claude   /   gcloud auth login   /   op signin"
+    echo "  4. Sign in:             claude   /   gcloud auth login   /   op signin"
   else
-    echo "  5. Casks are macOS-only: install Claude Code, gcloud and the"
+    echo "  4. Casks are macOS-only: install Claude Code, gcloud and the"
     echo "     1Password CLI from their vendor instructions, then sign in"
   fi
 fi
