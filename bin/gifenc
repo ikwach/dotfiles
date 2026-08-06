@@ -1,21 +1,45 @@
 #!/bin/sh
+# High-quality GIF from a video, via a per-clip colour palette.
 # From http://blog.pkh.me/p/21-high-quality-gif-with-ffmpeg.html
+#
+# Usage: gifenc <input> [output.gif]     FPS=15 gifenc clip.mov
+set -eu
 
-in="$1"
-out="$2"
-
-if [ -z "$out" ]; then
-  out="$(echo $in | cut -f 1 -d '.' ).gif"
+if [ $# -lt 1 ]; then
+  echo "Usage: $0 <input> [output.gif]" >&2
+  exit 1
 fi
 
-palette="/tmp/palette.png"
+in="$1"
+out="${2:-}"
+
+[ -f "$in" ] || { echo "No such file: $in" >&2; exit 1; }
+
+if [ -z "$out" ]; then
+  # Strip only the final extension. `cut -f1 -d.` cut at the FIRST dot, so
+  # my.clip.mov became my.gif, and any dot in a parent directory truncated
+  # the path outright.
+  out="${in%.*}.gif"
+fi
+
+# A private directory, not `mktemp -t <template>`: GNU substitutes the X's and
+# keeps the .png suffix, but BSD/macOS treats the whole argument as a prefix and
+# appends its own suffix, leaving a file that does not end in .png -- ffmpeg
+# infers the palettegen muxer from the extension, so it would fail there.
+# A fixed name inside a private directory sidesteps the difference, and also
+# fixes the original /tmp/palette.png, which raced between concurrent runs and
+# was a predictable-name write on multi-user machines.
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT INT TERM
+palette="$tmpdir/palette.png"
 
 fps=${FPS:-30}
-
 filters="fps=$fps,scale=500:-1:flags=lanczos"
 
-ffmpeg -v warning -i $in -vf "$filters,palettegen" -y $palette
-ffmpeg -v warning -i $in -i $palette -lavfi "$filters [x]; [x][1:v] paletteuse" -y $out
+# Everything quoted: this script exists for screen recordings, whose filenames
+# reliably contain spaces ("Screen Recording 2026-08-05 at 10.15.32.mov").
+ffmpeg -v warning -i "$in" -vf "$filters,palettegen" -y "$palette"
+ffmpeg -v warning -i "$in" -i "$palette" -lavfi "$filters [x]; [x][1:v] paletteuse" -y "$out"
 
 echo
-ls -lh $out
+ls -lh "$out"

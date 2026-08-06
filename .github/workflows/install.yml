@@ -54,3 +54,71 @@ jobs:
         run: |
           test -f nvim/lazy-lock.json
           test -d "$HOME/.local/share/nvim/lazy/lazy.nvim"
+
+  # Personal mode on Linux was previously only parse-checked, which is why
+  # linux-extras.sh could ship with an unattended-gpg hang nobody would hit
+  # until a real install. This actually runs it: the apt repositories, the
+  # signing keys and the second-run path.
+  #
+  # Linux only -- the macOS half of personal mode is casks, which need a real
+  # session and are not worth a runner.
+  personal-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      # ubuntu-latest ships the Google Cloud CLI preinstalled, so
+      # linux-extras.sh short-circuits on `command -v gcloud` and its own
+      # install path -- dearmor, sources.list, apt install -- never runs. The
+      # job then "verified" gcloud against the runner's copy, leaving the code
+      # that carried the unattended-gpg bug untested by the job meant to test it.
+      - name: Drop the runner's preinstalled gcloud so the installer's path runs
+        run: |
+          sudo apt-get remove -y google-cloud-cli || true
+          sudo rm -f /usr/share/keyrings/cloud.google.gpg \
+                     /etc/apt/sources.list.d/google-cloud-sdk.list
+          ! command -v gcloud
+
+      - name: Run installer via bootstrap (personal mode)
+        run: ./bootstrap.sh personal
+
+      - name: Verify the cask-equivalent tools actually installed
+        run: |
+          for brew_bin in /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew"; do
+            [ -x "$brew_bin" ] && eval "$("$brew_bin" shellenv)" && break
+          done
+          # Claude Code goes to ~/.local/bin, which is not on PATH under bash
+          test -x "$HOME/.local/bin/claude" || { echo "Claude Code missing"; exit 1; }
+          gcloud --version >/dev/null || { echo "gcloud missing"; exit 1; }
+          op --version    >/dev/null || { echo "1Password CLI missing"; exit 1; }
+          # Assert the keyrings the installer writes, so a future runner image
+          # preinstalling one of these cannot hollow this job out silently.
+          test -f /usr/share/keyrings/cloud.google.gpg \
+            || { echo "gcloud keyring missing -- installer path did not run"; exit 1; }
+          test -f /usr/share/keyrings/1password-archive-keyring.gpg \
+            || { echo "1Password keyring missing -- installer path did not run"; exit 1; }
+          echo "all personal-mode Linux tools installed by our own code path"
+
+      # Removing the packages while LEAVING the keyrings in place is what makes
+      # this exercise gpg at all. A plain rerun short-circuits on
+      # `command -v gcloud` and never reaches the dearmor step, so the earlier
+      # version of this job could not have caught the unattended-gpg bug.
+      - name: Remove the packages, keep the keyrings
+        run: |
+          sudo apt-get remove -y google-cloud-cli 1password-cli
+          test -f /usr/share/keyrings/cloud.google.gpg
+          test -f /usr/share/keyrings/1password-archive-keyring.gpg
+          ! command -v gcloud
+          ! command -v op
+
+      - name: Rerun over existing keyrings (dearmor must not prompt)
+        run: timeout 900 ./bootstrap.sh personal
+
+      # linux-extras.sh's exit code is swallowed by `|| warning` in install.sh,
+      # so assert the outcome directly or a failure here passes silently.
+      - name: Both tools reinstalled over the existing keyrings
+        run: |
+          gcloud --version >/dev/null || { echo "gcloud missing after rerun"; exit 1; }
+          op --version    >/dev/null || { echo "1Password CLI missing after rerun"; exit 1; }
+          echo "dearmor ran unattended over existing keyrings"

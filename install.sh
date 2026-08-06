@@ -27,6 +27,22 @@ case "$OSTYPE" in
   *)       fail "Unsupported OS: $OSTYPE" ;;
 esac
 
+# The documented install is `curl ... | bash -s -- personal`, where stdin is the
+# curl pipe for the whole run -- so `[[ -t 0 ]]` is false even with a user sat
+# right there. Ask the terminal directly instead. Anything that prompts must use
+# this and read from /dev/tty, or it silently takes the non-interactive path on
+# the exact command the README recommends.
+#
+# Actually open /dev/tty rather than just testing that it exists: on CI runners
+# and in containers the device node is present but has no controlling terminal,
+# so the open fails -- and a failed redirect on `read` would abort the whole
+# installer under `set -e`.
+# No `[[ -t 0 ]] && return 0` shortcut: every caller reads from /dev/tty, so
+# what matters is whether that open succeeds, not whether stdin is a terminal.
+# Returning early on the stdin check could green-light a redirect that then
+# fails, aborting the installer under set -e.
+have_tty() { (exec 3</dev/tty) 2>/dev/null; }
+
 # ----------------------------------------
 # Mode selection
 # ----------------------------------------
@@ -43,11 +59,11 @@ for arg in "$@"; do
   esac
 done
 if [[ -z "$MODE" ]]; then
-  if [[ -t 0 ]]; then
+  if have_tty; then
     echo "Select installation mode:"
     echo "  1) personal   - everything: core tools + AI, cloud, media"
     echo "  2) corporate  - restricted: core CLI tools only"
-    read -rp "Mode [1/2]: " choice
+    read -rp "Mode [1/2]: " choice </dev/tty
     case "$choice" in
       1) MODE="personal" ;;
       2) MODE="corporate" ;;
@@ -70,8 +86,11 @@ echo ""
 if ! command -v brew >/dev/null 2>&1; then
   if [[ "$OS" == "linux" ]] && command -v apt-get >/dev/null 2>&1; then
     info "Installing Homebrew build dependencies via apt..."
+    # gnupg is not a Homebrew dependency, but linux-extras.sh needs it to
+    # dearmor the gcloud and 1Password repository keys, and minimal images
+    # do not ship it.
     if ! (sudo apt-get update -qq && sudo apt-get install -y -qq \
-        build-essential procps curl file git zsh fontconfig); then
+        build-essential procps curl file git zsh fontconfig gnupg); then
       warning "apt dependencies failed; Homebrew install may not work"
     fi
   fi
@@ -84,8 +103,30 @@ fi
 for brew_bin in /opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew" /usr/local/bin/brew; do
   if [[ -x "$brew_bin" ]]; then
     eval "$("$brew_bin" shellenv)"
-    grep -q 'brew shellenv' "$HOME/.zprofile" 2>/dev/null || \
-      echo "eval \"\$($brew_bin shellenv)\"" >> "$HOME/.zprofile"
+    shellenv_line="eval \"\$($brew_bin shellenv)\""
+    # Match this exact brew, not any 'brew shellenv' line. Migrating Intel ->
+    # ARM (/usr/local -> /opt/homebrew), or /home/linuxbrew -> ~/.linuxbrew,
+    # otherwise leaves the stale line in place and never adds the right one,
+    # producing a broken login shell that re-running cannot repair.
+    if ! grep -qxF "$shellenv_line" "$HOME/.zprofile" 2>/dev/null; then
+      # Drop a shellenv line pointing at a different prefix. Anchored to the
+      # exact shape the installer writes, so a line a user wrote themselves that
+      # merely mentions "brew shellenv" is left alone.
+      stale_re='^[[:space:]]*eval "\$\(.*brew shellenv\)"[[:space:]]*$'
+      if [[ -f "$HOME/.zprofile" ]] && grep -qE "$stale_re" "$HOME/.zprofile"; then
+        mkdir -p "$BACKUP_DIR"
+        cp "$HOME/.zprofile" "$BACKUP_DIR/.zprofile"
+        # `grep -v` exits 1 when it filters out every line, which is exactly the
+        # single-line .zprofile the old installer wrote -- so `&& mv` silently
+        # skipped, leaving the stale line and an orphaned .tmp behind.
+        grep -vE "$stale_re" "$HOME/.zprofile" > "$HOME/.zprofile.tmp" || true
+        mv "$HOME/.zprofile.tmp" "$HOME/.zprofile"
+        warning "Replaced a stale brew shellenv line in ~/.zprofile (backed up)"
+      fi
+      # printf, not echo: a file with no trailing newline would otherwise get
+      # this appended to its last line, silently corrupting both.
+      printf '\n%s\n' "$shellenv_line" >> "$HOME/.zprofile"
+    fi
     break
   fi
 done
@@ -134,6 +175,18 @@ link() {
     mkdir -p "$BACKUP_DIR/$(dirname "$rel")"
     cp -r "$target" "$BACKUP_DIR/$rel" || fail "Could not back up $target, aborting before overwriting it"
     rm -rf "$target"
+  elif [[ -L "$target" ]]; then
+    # An existing symlink is someone else's config -- stow, chezmoi, another
+    # dotfiles repo. ln -sfn would replace it with nothing recorded, so note
+    # where it pointed. The link itself is cheap to recreate; knowing the
+    # target is the part that is lost otherwise.
+    local current rel
+    current="$(readlink "$target")"
+    if [[ "$current" != "$source" ]]; then
+      rel="${target#"$HOME"/}"
+      mkdir -p "$BACKUP_DIR"
+      printf '%s -> %s\n' "$rel" "$current" >> "$BACKUP_DIR/replaced-symlinks.txt"
+    fi
   fi
   mkdir -p "$(dirname "$target")"
   ln -sfn "$source" "$target"
@@ -172,7 +225,13 @@ mkdir -p "$HOME/.local/bin"
 for script in "$DOTFILES_DIR"/bin/*; do
   [[ -f "$script" ]] || continue
   name="$(basename "$script")"
-  [[ "$MODE" == "corporate" && "$name" == "gifenc" ]] && continue
+  # gifenc needs ffmpeg, which only personal mode installs. Switching
+  # personal -> corporate must remove the link, not just skip creating it,
+  # or a live symlink to a broken script survives the mode change.
+  if [[ "$MODE" == "corporate" && "$name" == "gifenc" ]]; then
+    [[ -L "$HOME/.local/bin/$name" ]] && rm -f "$HOME/.local/bin/$name"
+    continue
+  fi
   ln -sfn "$script" "$HOME/.local/bin/$name"
 done
 success "Linked bin/ scripts to ~/.local/bin"
@@ -181,7 +240,12 @@ if [[ -f "$HOME/.gitignore_global" ]]; then
   warning "The old ~/.gitignore_global is no longer used; global ignores now live in ~/.config/git/ignore"
 fi
 
-[[ -d "$BACKUP_DIR" ]] && info "Previous configs backed up to $BACKUP_DIR"
+# Only claim a backup when something other than the symlink ledger is in there.
+if [[ -d "$BACKUP_DIR" ]] && [[ -n "$(find "$BACKUP_DIR" -mindepth 1 ! -name 'replaced-symlinks.txt' -print -quit)" ]]; then
+  info "Previous configs backed up to $BACKUP_DIR"
+fi
+[[ -f "$BACKUP_DIR/replaced-symlinks.txt" ]] && \
+  info "Replaced symlinks recorded in $BACKUP_DIR/replaced-symlinks.txt"
 
 # ----------------------------------------
 # Nerd Font (Linux; macOS gets it as a cask)
@@ -189,7 +253,10 @@ fi
 
 if [[ "$OS" == "linux" ]] && command -v fc-cache >/dev/null 2>&1; then
   FONT_DIR="$HOME/.local/share/fonts/JetBrainsMonoNerdFont"
-  if [[ ! -d "$FONT_DIR" ]]; then
+  # Check for actual font files, not just the directory: if a previous run
+  # created the directory and then failed to extract, testing -d alone would
+  # skip the install forever and leave the prompt rendering as tofu.
+  if ! compgen -G "$FONT_DIR/*.ttf" >/dev/null 2>&1; then
     info "Installing JetBrains Mono Nerd Font..."
     font_tmp="$(mktemp -d)"
     if curl -fsSL -o "$font_tmp/JetBrainsMono.tar.xz" \
@@ -197,12 +264,31 @@ if [[ "$OS" == "linux" ]] && command -v fc-cache >/dev/null 2>&1; then
         && mkdir -p "$FONT_DIR" \
         && tar -xJf "$font_tmp/JetBrainsMono.tar.xz" -C "$FONT_DIR"; then
       fc-cache -f "$FONT_DIR" >/dev/null || true
-      success "Nerd Font installed (set it in your terminal profile)"
+      success "Nerd Font installed"
     else
       warning "Font download failed; install a Nerd Font manually for prompt icons"
     fi
     rm -rf "$font_tmp"
+  else
+    success "Nerd Font already installed"
   fi
+fi
+
+# Point the terminal at the font. Deliberately outside the fc-cache check above:
+# installing font files and configuring the terminal are independent, and
+# fontconfig is only apt-installed when Homebrew was missing -- so a machine
+# that already had brew would otherwise never get its terminal configured.
+# Exit code matters here: 0 configured, 1 failed, 2 nothing to configure.
+# Treating any non-failure as success reported "Terminal font is configured" on
+# headless boxes that had printed "No supported terminal found" moments earlier.
+TERMINAL_CONFIGURED=0
+if [[ "$OS" == "linux" && -x "$DOTFILES_DIR/linux-terminal.sh" ]]; then
+  "$DOTFILES_DIR/linux-terminal.sh" && terminal_rc=0 || terminal_rc=$?
+  case "$terminal_rc" in
+    0) TERMINAL_CONFIGURED=1 ;;
+    2) : ;;   # nothing to configure; next-steps tells the user what to set
+    *) warning "Terminal font setup failed; set it manually" ;;
+  esac
 fi
 
 # ----------------------------------------
@@ -211,12 +297,17 @@ fi
 
 if [[ ! -f "$HOME/.gitconfig.local" ]]; then
   info "Setting up git identity (${MODE} mode)..."
-  if [[ -t 0 ]]; then
-    read -rp "Git name: " git_name
+  # Read from /dev/tty, not stdin: on the piped bootstrap path stdin is the
+  # script itself. Without this the prompt is skipped, no ~/.gitconfig.local is
+  # written, and since git/.gitconfig includes it unconditionally git falls back
+  # to a guessed user@hostname -- committing under a wrong identity rather than
+  # failing loudly.
+  if have_tty; then
+    read -rp "Git name: " git_name </dev/tty
     if [[ "$MODE" == "corporate" ]]; then
-      read -rp "Git email (use your WORK email): " git_email
+      read -rp "Git email (use your WORK email): " git_email </dev/tty
     else
-      read -rp "Git email: " git_email
+      read -rp "Git email: " git_email </dev/tty
     fi
     printf '[user]\n\tname = %s\n\temail = %s\n' "$git_name" "$git_email" > "$HOME/.gitconfig.local"
     success "Wrote ~/.gitconfig.local"
@@ -259,10 +350,36 @@ if [[ ! -f "$HOME/.config/btop/btop.conf" ]]; then
   success "btop config created"
 fi
 
-if [[ ! -d "$HOME/.tmux/plugins/tpm" ]]; then
+# Test for the .git directory, not the directory itself: an interrupted clone
+# leaves an empty or partial directory that would skip this forever, the same
+# trap as the nerd font check. bootstrap.sh already tests .git this way.
+if [[ ! -d "$HOME/.tmux/plugins/tpm/.git" ]]; then
   info "Installing tmux plugin manager..."
-  git clone --depth 1 https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
-  success "TPM installed (prefix + I inside tmux installs plugins)"
+  # Move a non-git tpm aside rather than deleting it: it may be a tarball or
+  # package install rather than a half-finished clone. Guarded like the clone
+  # below -- an unguarded mv would abort the installer under set -e before
+  # Neovim, the extras and chsh.
+  tpm_ready=1
+  if [[ -e "$HOME/.tmux/plugins/tpm" ]]; then
+    mkdir -p "$BACKUP_DIR/.tmux/plugins"
+    if mv "$HOME/.tmux/plugins/tpm" "$BACKUP_DIR/.tmux/plugins/tpm"; then
+      warning "Moved an existing non-git tpm to $BACKUP_DIR/.tmux/plugins/tpm"
+    else
+      # The clone would fail anyway with the directory still in place, so skip
+      # it rather than emit a second, more confusing error.
+      warning "Could not move the existing tpm aside; leaving it in place"
+      tpm_ready=0
+    fi
+  fi
+  # Guarded like every other network call here: a proxy or a GitHub blip should
+  # not abort the installer before mise, Neovim, the extras and chsh.
+  if [[ "$tpm_ready" == 1 ]]; then
+    if git clone --depth 1 https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"; then
+      success "TPM installed (prefix + I inside tmux installs plugins)"
+    else
+      warning "Could not clone TPM; tmux will install it on first launch"
+    fi
+  fi
 fi
 
 if command -v tldr >/dev/null 2>&1; then
@@ -293,6 +410,14 @@ if command -v nvim >/dev/null 2>&1; then
   success "Neovim ready"
 fi
 
+# Personal mode on macOS installs Claude Code, gcloud and the 1Password CLI as
+# casks. Those lines are stripped on Linux, so install the same tools from the
+# vendors' Linux channels to keep the two platforms at parity.
+if [[ "$MODE" == "personal" && "$OS" == "linux" && -x "$DOTFILES_DIR/linux-extras.sh" ]]; then
+  info "Installing personal-mode tools that are casks on macOS..."
+  "$DOTFILES_DIR/linux-extras.sh" || warning "Some Linux extras failed; see the output above"
+fi
+
 if [[ "$WITH_MACOS_DEFAULTS" == 1 && "$OS" == "macos" ]]; then
   info "Applying macOS defaults..."
   if "$DOTFILES_DIR/macos.sh"; then success "macOS defaults applied"; else warning "macos.sh failed"; fi
@@ -310,9 +435,24 @@ if [[ "$WITH_MAC_KEYS" == 1 && "$OS" == "linux" ]]; then
   fi
 fi
 
-if [[ "$SHELL" != *zsh ]] && command -v zsh >/dev/null 2>&1; then
-  info "Setting zsh as default shell..."
+# $SHELL reflects the shell that happens to be running, which is not the login
+# shell inside editors, CI or a nested bash. Read the account record instead --
+# getent on Linux, dscl on macOS, which has no getent. Both are guarded because
+# a missing command would otherwise take the whole script down under `set -e`.
+LOGIN_SHELL=""
+if command -v getent >/dev/null 2>&1; then
+  LOGIN_SHELL="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)" || LOGIN_SHELL=""
+elif command -v dscl >/dev/null 2>&1; then
+  LOGIN_SHELL="$(dscl . -read "/Users/$(id -un)" UserShell 2>/dev/null | awk '{print $2}')" || LOGIN_SHELL=""
+fi
+LOGIN_SHELL="${LOGIN_SHELL:-$SHELL}"
+if [[ "$LOGIN_SHELL" == *zsh ]]; then
+  success "Login shell already zsh"
+elif command -v zsh >/dev/null 2>&1; then
+  info "Setting zsh as default shell (currently $LOGIN_SHELL)..."
   chsh -s "$(command -v zsh)" || warning "Could not change the default shell; run chsh manually"
+else
+  warning "zsh is not installed; login shell left as $LOGIN_SHELL"
 fi
 
 # ----------------------------------------
@@ -327,17 +467,31 @@ echo "  1. Restart your terminal"
 if [[ "$OS" == "macos" ]]; then
   echo "  2. iTerm2: Settings > Profiles > 'dotfiles' > Other Actions > Set as Default"
   echo "     (Dracula+ colors and the nerd font are baked into the profile)"
+elif [[ "$TERMINAL_CONFIGURED" == 1 ]]; then
+  echo "  2. Terminal font is configured. Quit the terminal completely and reopen"
+  echo "     -- a new tab is not enough, since a running terminal caches the font"
+  echo "     list from startup."
 else
   echo "  2. Set your terminal font to JetBrainsMono Nerd Font"
-  echo "     (GNOME Terminal catppuccin: github.com/catppuccin/gnome-terminal)"
 fi
 echo "  3. Import history:      atuin import zsh"
 if [[ "$MODE" == "personal" ]]; then
-  if [[ "$OS" == "macos" ]]; then
-    echo "  4. Sign in:             claude   /   gcloud auth login   /   op signin"
-  else
-    echo "  4. Casks are macOS-only: install Claude Code, gcloud and the"
-    echo "     1Password CLI from their vendor instructions, then sign in"
+  # Only name tools that are actually here: on Linux the apt-based ones are
+  # skipped when sudo is unavailable, and telling someone to run a command
+  # they do not have is worse than saying nothing.
+  signins=()
+  { command -v claude >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/claude" ]]; } && signins+=("claude")
+  command -v gcloud >/dev/null 2>&1 && signins+=("gcloud auth login")
+  command -v op     >/dev/null 2>&1 && signins+=("op signin")
+  if [[ ${#signins[@]} -gt 0 ]]; then
+    # "${arr[*]}" joins on the FIRST character of IFS only, so IFS=' / ' gave
+    # "claude gcloud auth login op signin" -- unreadable, since the entries
+    # themselves contain spaces.
+    printf -v joined '%s / ' "${signins[@]}"
+    echo "  4. Sign in:             ${joined% / }"
+  fi
+  if [[ "$OS" == "linux" ]]; then
+    echo "     Claude desktop app: https://code.claude.com/docs/en/desktop-linux"
   fi
 fi
 echo ""

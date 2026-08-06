@@ -45,7 +45,9 @@ setopt HIST_IGNORE_SPACE  # commands starting with a space stay out
 # Everything below is guarded so the shell starts cleanly even before
 # install.sh has run (or on machines where some tools are blocked).
 if command -v brew >/dev/null; then
-  ANTIDOTE_ZSH="$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
+  # $HOMEBREW_PREFIX is exported by the shellenv eval above; `brew --prefix`
+  # would fork a process on every shell start to learn the same thing.
+  ANTIDOTE_ZSH="${HOMEBREW_PREFIX:-$(brew --prefix)}/opt/antidote/share/antidote/antidote.zsh"
   if [[ -r "$ANTIDOTE_ZSH" ]]; then
     source "$ANTIDOTE_ZSH"
     antidote load

@@ -60,7 +60,13 @@ Corporate mode also prompts for your **work** git email, and nothing personal is
 
 ### Linux
 
-Packages come from [Homebrew on Linux](https://docs.brew.sh/Homebrew-on-Linux) on both OSes, so there is one manifest with identical tool versions and no `batcat`/`fdfind` renames. apt is only used to bootstrap Homebrew's build dependencies. Casks (iTerm2, the GUI apps in personal mode) are macOS-only and get skipped; JetBrains Mono Nerd Font is installed from the nerd-fonts release into `~/.local/share/fonts` instead. For the stock GNOME Terminal, set that font in your profile and use [catppuccin/gnome-terminal](https://github.com/catppuccin/gnome-terminal) for the colors. The `install` CI workflow runs corporate mode on both Ubuntu and macOS on every PR.
+Packages come from [Homebrew on Linux](https://docs.brew.sh/Homebrew-on-Linux) on both OSes, so there is one manifest with identical tool versions and no `batcat`/`fdfind` renames. apt is only used to bootstrap Homebrew's build dependencies. iTerm2 and the other casks are macOS-only and get skipped; JetBrains Mono Nerd Font is installed from the nerd-fonts release into `~/.local/share/fonts` instead.
+
+**Terminal font is set for you.** `linux-terminal.sh` points the terminal at the nerd font over gsettings, covering Ptyxis (the default from Ubuntu 25.10), GNOME Terminal and Console - the counterpart to the iTerm2 dynamic profile on macOS. A font you chose yourself is left alone; force it with `DOTFILES_TERMINAL_FONT`, which also overrides the font that gets set. Quit the terminal completely afterwards: a running one caches the font list from startup, so a new tab still shows tofu. For colors, Ptyxis ships palettes in its preferences; GNOME Terminal users can use [catppuccin/gnome-terminal](https://github.com/catppuccin/gnome-terminal).
+
+**Personal mode installs the cask tools too.** Since `cask` lines are stripped on Linux, `linux-extras.sh` installs Claude Code (native installer), the gcloud CLI and the 1Password CLI from their official Linux channels, so personal mode is not quietly thinner than on macOS. The Claude desktop app is the one exception - see [desktop on Linux](https://code.claude.com/docs/en/desktop-linux).
+
+The `install` CI workflow runs corporate mode on both Ubuntu and macOS on every PR, plus personal mode on Ubuntu - the only coverage for `linux-extras.sh`.
 
 ## What's where
 
@@ -71,6 +77,8 @@ Brewfile.macos       # macOS-only: iTerm2, nerd font cask, mas
 Brewfile.personal    # extras for personal mode
 install.sh           # installer (brew, symlinks, git identity, secrets, theme caches)
 macos.sh             # opt-in macOS system defaults (--with-macos-defaults)
+linux-terminal.sh    # sets the nerd font in Ptyxis/GNOME Terminal/Console
+linux-extras.sh      # Linux installs for the personal-mode cask tools
 iterm2/              # dynamic profile (Dracula+ colors + nerd font, auto-loaded)
 zsh/                 # .zshrc + antidote plugin list
 starship/            # prompt config (catppuccin mocha powerline)

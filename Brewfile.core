@@ -29,3 +29,7 @@ brew "neovim"
 brew "mise"           # polyglot version manager (replaces nvm/pyenv/rbenv)
 brew "tmux"
 
+# --- Dependencies of bin/ scripts (linked onto PATH in both modes) ---
+brew "fswatch"        # super-sync: file watching
+brew "rsync"          # super-sync: the sync itself (macOS ships an ancient one)
+
