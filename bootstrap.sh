@@ -48,7 +48,16 @@ if [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/install.sh" ]]; then
   DOTFILES_DIR="$SCRIPT_DIR"
 elif [[ -d "$DOTFILES_DIR/.git" ]]; then
   info "Updating existing clone at $DOTFILES_DIR"
-  git -C "$DOTFILES_DIR" pull --ff-only || warning "Could not fast-forward; using the clone as is"
+  # Our own git/.gitconfig sets rebase.autoStash, so a dirty clone makes this
+  # pull create a stash commit first -- and a machine whose git identity is
+  # missing or half-written (an empty name in ~/.gitconfig.local) cannot
+  # create any commit: git aborts before the fast-forward and the run
+  # continues on the stale clone, which is exactly how a broken installer
+  # keeps reinstalling itself. The stash is local and momentary, so a
+  # throwaway ident is fine; it must not depend on the very identity this
+  # repo's installer is about to set up.
+  git -C "$DOTFILES_DIR" -c user.name=bootstrap -c user.email=bootstrap@localhost \
+    pull --ff-only || warning "Could not fast-forward; using the clone as is"
 else
   info "Cloning dotfiles to $DOTFILES_DIR"
   mkdir -p "$(dirname "$DOTFILES_DIR")"

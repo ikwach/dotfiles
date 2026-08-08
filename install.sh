@@ -151,6 +151,23 @@ if brew trust --help >/dev/null 2>&1; then
   done < <(compose_brewfile | awk -F'"' '/^tap /{print $2}')
 fi
 
+# A claude binary Homebrew does not own -- npm's global bin, an old manual
+# copy, or a symlink left behind by a purged cask -- makes the claude-code
+# cask abort with "already a Binary", failing the bundle run every time.
+# Move it aside (backed up) so the cask can own the path and its updates.
+# -L as well as -e: a dangling symlink fails -e but still blocks the cask.
+if [[ "$OS" == "macos" && "$MODE" == "personal" ]]; then
+  brew_claude="$(brew --prefix)/bin/claude"
+  if [[ -e "$brew_claude" || -L "$brew_claude" ]] && ! brew list --cask claude-code >/dev/null 2>&1; then
+    mkdir -p "$BACKUP_DIR"
+    if mv "$brew_claude" "$BACKUP_DIR/claude"; then
+      warning "Moved a non-cask claude at $brew_claude aside so the cask can install (backed up)"
+    else
+      warning "Could not move $brew_claude; the claude-code cask may fail to install"
+    fi
+  fi
+fi
+
 info "Installing packages (this can take a while)..."
 if [[ "$OS" == "linux" ]]; then
   # Casks are a macOS concept; drop any that appear in Brewfile.personal
@@ -455,9 +472,21 @@ fi
 # installs instead of being buried in the middle of them. The old manual
 # prompt survives as the fallback for a declined login, a failed one, or a
 # machine where GitHub is not the forge.
-if [[ -f "$HOME/.gitconfig.local" ]]; then
+# An existing file does not prove a usable identity: the old prompt accepted
+# an empty answer, and a machine with `name =` blank cannot create any commit
+# -- not even the autostash commit a bootstrap pull needs, which is how one
+# machine got stuck on a stale clone. Validate the two keys, not the file.
+git_identity_ok() {
+  [[ -n "$(git config --file "$HOME/.gitconfig.local" user.name 2>/dev/null)" ]] \
+    && [[ -n "$(git config --file "$HOME/.gitconfig.local" user.email 2>/dev/null)" ]]
+}
+
+if git_identity_ok; then
   success "Git identity already configured (~/.gitconfig.local)"
 else
+  if [[ -f "$HOME/.gitconfig.local" ]]; then
+    warning "Existing ~/.gitconfig.local is missing a name or email; repairing it"
+  fi
   gh_authed=0
   if command -v gh >/dev/null 2>&1; then
     if gh auth status >/dev/null 2>&1; then
@@ -493,27 +522,39 @@ else
     # "Keep my email addresses private" push protection expects in commits.
     git_email="$(gh api user --jq '.email // "\(.id)+\(.login)@users.noreply.github.com"' 2>/dev/null)" || git_email=""
     if [[ -n "$git_name" && -n "$git_email" ]]; then
-      printf '[user]\n\tname = %s\n\temail = %s\n' "$git_name" "$git_email" > "$HOME/.gitconfig.local"
+      # git config, not a printf of the whole file: a repair must not wipe
+      # whatever else the user has added to ~/.gitconfig.local over time.
+      git config --file "$HOME/.gitconfig.local" user.name "$git_name"
+      git config --file "$HOME/.gitconfig.local" user.email "$git_email"
       success "Git identity from GitHub: $git_name <$git_email>"
     else
       warning "Could not read your GitHub profile; falling back to the manual prompt"
     fi
   fi
 
-  if [[ ! -f "$HOME/.gitconfig.local" ]]; then
+  if ! git_identity_ok; then
     # Read from /dev/tty, not stdin: on the piped bootstrap path stdin is the
     # script itself. Without this the prompt is skipped, no ~/.gitconfig.local
     # is written, and since git/.gitconfig includes it unconditionally git
     # falls back to a guessed user@hostname -- committing under a wrong
     # identity rather than failing loudly.
     if have_tty; then
-      read -rp "Git name: " git_name </dev/tty
-      if [[ "$MODE" == "corporate" ]]; then
-        read -rp "Git email (use your WORK email): " git_email </dev/tty
-      else
-        read -rp "Git email: " git_email </dev/tty
-      fi
-      printf '[user]\n\tname = %s\n\temail = %s\n' "$git_name" "$git_email" > "$HOME/.gitconfig.local"
+      # Loop until non-empty: accepting a blank answer here is what produced
+      # the half-written identity this section now has to repair.
+      git_name=""
+      while [[ -z "$git_name" ]]; do
+        read -rp "Git name: " git_name </dev/tty
+      done
+      git_email=""
+      while [[ -z "$git_email" ]]; do
+        if [[ "$MODE" == "corporate" ]]; then
+          read -rp "Git email (use your WORK email): " git_email </dev/tty
+        else
+          read -rp "Git email: " git_email </dev/tty
+        fi
+      done
+      git config --file "$HOME/.gitconfig.local" user.name "$git_name"
+      git config --file "$HOME/.gitconfig.local" user.email "$git_email"
       success "Wrote ~/.gitconfig.local"
     else
       warning "Non-interactive shell: create ~/.gitconfig.local with your [user] name/email"
