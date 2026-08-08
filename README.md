@@ -41,7 +41,7 @@ Optional flags (work with both entry points):
 | `--with-macos-defaults` | apply the system settings in `macos.sh` (keyboard repeat, Finder, screenshots folder, tap to click) |
 | `--with-mac-keys` | Linux only: install [Toshy](https://github.com/RedBearAK/toshy) for mac-style keyboard shortcuts |
 
-Everything is idempotent - rerun any time. Existing configs are backed up to `~/.dotfiles-backup-<timestamp>` before being replaced with symlinks. Personal mode also installs node (lts) and go via mise, and neovim plugins and language servers are pre-installed at exact lockfile versions, so the first `nvim` launch is instant. On macOS an iTerm2 dynamic profile named `dotfiles` appears automatically with Dracula+ colors and the nerd font baked in - select it once as your default profile.
+Everything is idempotent - rerun any time. Existing configs are backed up to `~/.dotfiles-backup-<timestamp>` before being replaced with symlinks. Any existing zsh history is imported into atuin (only into an empty database, so reruns never duplicate it). Personal mode also installs node (lts) and go via mise, and neovim plugins and language servers are pre-installed at exact lockfile versions, so the first `nvim` launch is instant. On macOS an iTerm2 dynamic profile named `dotfiles` appears automatically with Dracula+ colors and the nerd font baked in - select it once as your default profile.
 
 ## Modes
 
@@ -52,11 +52,11 @@ Everything is idempotent - rerun any time. Existing configs are backed up to `~/
 | Git: delta (catppuccin), lazygit, gh | ✅ | ✅ |
 | Dev: neovim, mise, tmux, iTerm2, JetBrains Mono Nerd Font | ✅ | ✅ |
 | AI: Claude Code, Claude desktop | - | ✅ |
-| Cloud: gcloud, cloud-sql-proxy, firebase, vercel, supabase | - | ✅ |
+| Cloud: gcloud, cloud-sql-proxy | - | ✅ |
 | Media: ffmpeg, yt-dlp, pandoc, rclone | - | ✅ |
 | 1Password CLI | - | ✅ |
 
-Corporate mode also prompts for your **work** git email, and nothing personal is baked into the repo - identity, secrets, and machine-specific config all live in local files (see below).
+Git identity is set up at the end of the install: log in to GitHub in the browser (`gh auth login`, default yes) and your name and email are taken from the account - a hidden email becomes the account's noreply address, and git is wired to push/pull with gh's credentials. Decline the login and the installer falls back to prompting; corporate mode asks for your **work** email there. Nothing personal is baked into the repo - identity, secrets, and machine-specific config all live in local files (see below).
 
 ### Linux
 
@@ -94,7 +94,7 @@ bin/                 # gifenc (ffmpeg gif encoder), super-sync (rsync watch)
 
 | File | Purpose |
 |---|---|
-| `~/.gitconfig.local` | git name/email - created by installer |
+| `~/.gitconfig.local` | git name/email - from the GitHub login (or the fallback prompt) |
 | `~/.secrets.env` | API keys, `chmod 600`, sourced by `.zshrc`; prefer `op read` for values |
 | `~/.zshrc.local` | machine-specific shell config |
 

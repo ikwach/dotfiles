@@ -292,33 +292,6 @@ if [[ "$OS" == "linux" && -x "$DOTFILES_DIR/linux-terminal.sh" ]]; then
 fi
 
 # ----------------------------------------
-# Git identity (kept out of the repo)
-# ----------------------------------------
-
-if [[ ! -f "$HOME/.gitconfig.local" ]]; then
-  info "Setting up git identity (${MODE} mode)..."
-  # Read from /dev/tty, not stdin: on the piped bootstrap path stdin is the
-  # script itself. Without this the prompt is skipped, no ~/.gitconfig.local is
-  # written, and since git/.gitconfig includes it unconditionally git falls back
-  # to a guessed user@hostname -- committing under a wrong identity rather than
-  # failing loudly.
-  if have_tty; then
-    read -rp "Git name: " git_name </dev/tty
-    if [[ "$MODE" == "corporate" ]]; then
-      read -rp "Git email (use your WORK email): " git_email </dev/tty
-    else
-      read -rp "Git email: " git_email </dev/tty
-    fi
-    printf '[user]\n\tname = %s\n\temail = %s\n' "$git_name" "$git_email" > "$HOME/.gitconfig.local"
-    success "Wrote ~/.gitconfig.local"
-  else
-    warning "Non-interactive shell: create ~/.gitconfig.local with your [user] name/email"
-  fi
-else
-  success "Git identity already configured (~/.gitconfig.local)"
-fi
-
-# ----------------------------------------
 # Secrets file
 # ----------------------------------------
 
@@ -385,6 +358,23 @@ fi
 if command -v tldr >/dev/null 2>&1; then
   info "Updating tldr cache..."
   tldr --update >/dev/null 2>&1 && success "tldr cache updated"
+fi
+
+# Import pre-existing zsh history so Ctrl+R is useful from the first session,
+# instead of asking the user to run this themselves. Only into an empty atuin
+# database: import does not deduplicate, so on a rerun it would double every
+# entry. A machine with no history file yet has nothing to import -- skip
+# silently rather than warn about a non-problem.
+if command -v atuin >/dev/null 2>&1; then
+  hist_file="${HISTFILE:-$HOME/.zsh_history}"
+  if [[ -f "$hist_file" ]] && [[ -z "$(atuin history list 2>/dev/null | head -n 1)" ]]; then
+    info "Importing shell history into atuin..."
+    if atuin import zsh >/dev/null 2>&1; then
+      success "Shell history imported"
+    else
+      warning "History import failed; run 'atuin import zsh' manually"
+    fi
+  fi
 fi
 
 # Runtimes for personal machines; corporate boxes may have their own policy
@@ -456,6 +446,82 @@ else
 fi
 
 # ----------------------------------------
+# Git identity (kept out of the repo)
+# ----------------------------------------
+
+# Taken from GitHub rather than typed in: a browser login via gh, then the
+# account's name and email flow into ~/.gitconfig.local. Deliberately the last
+# step of the run, so the hand-off to the browser comes after the long package
+# installs instead of being buried in the middle of them. The old manual
+# prompt survives as the fallback for a declined login, a failed one, or a
+# machine where GitHub is not the forge.
+if [[ -f "$HOME/.gitconfig.local" ]]; then
+  success "Git identity already configured (~/.gitconfig.local)"
+else
+  gh_authed=0
+  if command -v gh >/dev/null 2>&1; then
+    if gh auth status >/dev/null 2>&1; then
+      # Already signed in (a rerun, or gh set up beforehand) -- no prompt, the
+      # identity can be derived straight away.
+      gh_authed=1
+    elif have_tty; then
+      echo ""
+      info "Git identity can be taken from your GitHub account."
+      read -rp "Log in to GitHub in the browser? [Y/n]: " gh_choice </dev/tty
+      # Anything that is not an explicit no counts as the default yes
+      if [[ ! "$gh_choice" =~ ^[Nn] ]]; then
+        # gh prompts on its own stdin, which on the piped bootstrap path is
+        # the script itself -- point it at the terminal like every prompt
+        # here. stdout stays untouched: gh prints the one-time code there.
+        if gh auth login --hostname github.com --git-protocol https --web </dev/tty; then
+          gh_authed=1
+        else
+          warning "GitHub login failed or was cancelled; falling back to the manual prompt"
+        fi
+      fi
+    fi
+  fi
+
+  if [[ "$gh_authed" == 1 ]]; then
+    # Let git itself push and pull with gh's credentials, not just the API
+    gh auth setup-git >/dev/null 2>&1 || true
+    # `// .login` alone is not enough: an unset display name is null, but a
+    # cleared one can be the empty string, and either should fall back.
+    git_name="$(gh api user --jq 'if (.name // "") == "" then .login else .name end' 2>/dev/null)" || git_name=""
+    # A profile with a hidden email gets the account's noreply address --
+    # GitHub links it to the account all the same, and it is the address the
+    # "Keep my email addresses private" push protection expects in commits.
+    git_email="$(gh api user --jq '.email // "\(.id)+\(.login)@users.noreply.github.com"' 2>/dev/null)" || git_email=""
+    if [[ -n "$git_name" && -n "$git_email" ]]; then
+      printf '[user]\n\tname = %s\n\temail = %s\n' "$git_name" "$git_email" > "$HOME/.gitconfig.local"
+      success "Git identity from GitHub: $git_name <$git_email>"
+    else
+      warning "Could not read your GitHub profile; falling back to the manual prompt"
+    fi
+  fi
+
+  if [[ ! -f "$HOME/.gitconfig.local" ]]; then
+    # Read from /dev/tty, not stdin: on the piped bootstrap path stdin is the
+    # script itself. Without this the prompt is skipped, no ~/.gitconfig.local
+    # is written, and since git/.gitconfig includes it unconditionally git
+    # falls back to a guessed user@hostname -- committing under a wrong
+    # identity rather than failing loudly.
+    if have_tty; then
+      read -rp "Git name: " git_name </dev/tty
+      if [[ "$MODE" == "corporate" ]]; then
+        read -rp "Git email (use your WORK email): " git_email </dev/tty
+      else
+        read -rp "Git email: " git_email </dev/tty
+      fi
+      printf '[user]\n\tname = %s\n\temail = %s\n' "$git_name" "$git_email" > "$HOME/.gitconfig.local"
+      success "Wrote ~/.gitconfig.local"
+    else
+      warning "Non-interactive shell: create ~/.gitconfig.local with your [user] name/email"
+    fi
+  fi
+fi
+
+# ----------------------------------------
 # Done
 # ----------------------------------------
 
@@ -474,7 +540,6 @@ elif [[ "$TERMINAL_CONFIGURED" == 1 ]]; then
 else
   echo "  2. Set your terminal font to JetBrainsMono Nerd Font"
 fi
-echo "  3. Import history:      atuin import zsh"
 if [[ "$MODE" == "personal" ]]; then
   # Only name tools that are actually here: on Linux the apt-based ones are
   # skipped when sudo is unavailable, and telling someone to run a command
@@ -488,7 +553,7 @@ if [[ "$MODE" == "personal" ]]; then
     # "claude gcloud auth login op signin" -- unreadable, since the entries
     # themselves contain spaces.
     printf -v joined '%s / ' "${signins[@]}"
-    echo "  4. Sign in:             ${joined% / }"
+    echo "  3. Sign in:             ${joined% / }"
   fi
   if [[ "$OS" == "linux" ]]; then
     echo "     Claude desktop app: https://code.claude.com/docs/en/desktop-linux"

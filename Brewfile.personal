@@ -10,8 +10,6 @@ cask "claude"         # Claude desktop app
 # --- Cloud & deploy ---
 cask "gcloud-cli"     # Google Cloud SDK
 brew "cloud-sql-proxy"
-brew "firebase-cli"
-brew "vercel"
 
 # --- Media & documents ---
 brew "ffmpeg"
