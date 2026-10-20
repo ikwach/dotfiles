@@ -69,7 +69,20 @@ command -v atuin >/dev/null && eval "$(atuin init zsh --disable-up-arrow)"
 command -v zoxide >/dev/null && eval "$(zoxide init zsh)"
 
 # mise polyglot version manager (node, python, etc.)
-command -v mise >/dev/null && eval "$(mise activate zsh)"
+if command -v mise >/dev/null; then
+  eval "$(mise activate zsh)"
+
+  # mise re-runs `mise hook-env` before every prompt so edits to .nvmrc or
+  # mise.toml apply without a cd, but starting mise costs ~150ms on a loaded
+  # machine. Keep only its cd hook, plus a rerun after any `mise` command so
+  # `mise use` / `mise install` still apply at once; after editing those files
+  # by hand, `cd .` picks the change up.
+  _mise_preexec() { [[ $1 == mise(| *) ]] && _mise_rerun=1 }
+  _mise_precmd() { (( _mise_rerun )) && { _mise_rerun=0; _mise_hook --reason precmd } }
+  add-zsh-hook -d precmd _mise_hook_precmd
+  add-zsh-hook preexec _mise_preexec
+  add-zsh-hook precmd _mise_precmd
+fi
 
 # ========================================
 # Aliases
