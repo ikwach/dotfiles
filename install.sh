@@ -151,23 +151,6 @@ if brew trust --help >/dev/null 2>&1; then
   done < <(compose_brewfile | awk -F'"' '/^tap /{print $2}')
 fi
 
-# A claude binary Homebrew does not own -- npm's global bin, an old manual
-# copy, or a symlink left behind by a purged cask -- makes the claude-code
-# cask abort with "already a Binary", failing the bundle run every time.
-# Move it aside (backed up) so the cask can own the path and its updates.
-# -L as well as -e: a dangling symlink fails -e but still blocks the cask.
-if [[ "$OS" == "macos" && "$MODE" == "personal" ]]; then
-  brew_claude="$(brew --prefix)/bin/claude"
-  if [[ -e "$brew_claude" || -L "$brew_claude" ]] && ! brew list --cask claude-code >/dev/null 2>&1; then
-    mkdir -p "$BACKUP_DIR"
-    if mv "$brew_claude" "$BACKUP_DIR/claude"; then
-      warning "Moved a non-cask claude at $brew_claude aside so the cask can install (backed up)"
-    else
-      warning "Could not move $brew_claude; the claude-code cask may fail to install"
-    fi
-  fi
-fi
-
 info "Installing packages (this can take a while)..."
 if [[ "$OS" == "linux" ]]; then
   # Casks are a macOS concept; drop any that appear in Brewfile.personal
@@ -417,9 +400,48 @@ if command -v nvim >/dev/null 2>&1; then
   success "Neovim ready"
 fi
 
-# Personal mode on macOS installs Claude Code, gcloud and the 1Password CLI as
-# casks. Those lines are stripped on Linux, so install the same tools from the
-# vendors' Linux channels to keep the two platforms at parity.
+# Claude Code from Anthropic's native installer on both OSes, the method its
+# docs recommend: it lands in ~/.local/bin/claude and updates itself in the
+# background, where the Homebrew cask this used to install on macOS only moved
+# on `brew upgrade`. https://code.claude.com/docs/en/setup
+#
+# Test the native path, not `command -v claude`: on a Mac still holding the old
+# cask that finds the cask's copy and would skip the native install for good.
+if [[ "$MODE" == "personal" ]]; then
+  native_claude="$HOME/.local/bin/claude"
+  if [[ -x "$native_claude" ]]; then
+    success "Claude Code already installed"
+  else
+    info "Installing Claude Code..."
+    if curl -fsSL https://claude.ai/install.sh | bash; then
+      success "Claude Code installed (run 'claude' to sign in)"
+    else
+      warning "Claude Code install failed; see https://code.claude.com/docs/en/setup"
+    fi
+  fi
+  # Retire the cask only once the native copy is in, so a failed download never
+  # leaves the machine without claude. brew bundle never removes what a Brewfile
+  # stops listing, so this has to be explicit.
+  if [[ "$OS" == "macos" && -x "$native_claude" ]] && brew list --cask claude-code >/dev/null 2>&1; then
+    if brew uninstall --cask claude-code >/dev/null 2>&1; then
+      success "Removed the claude-code cask; the native install replaces it"
+    else
+      warning "Could not remove the claude-code cask; run: brew uninstall --cask claude-code"
+    fi
+  fi
+  # Any other copy (an npm global install, a hand-made one) duplicates the
+  # native install or shadows it on PATH. -ef rather than a string compare, so
+  # the native launcher reached through a differently spelled PATH entry still
+  # counts as itself.
+  while IFS= read -r other_claude; do
+    [[ "$other_claude" -ef "$native_claude" ]] ||
+      warning "Another claude at $other_claude; remove it so only the native install is left"
+  done < <(type -ap claude | sort -u)
+fi
+
+# Personal mode on macOS installs gcloud and the 1Password CLI as casks. Those
+# lines are stripped on Linux, so install the same tools from the vendors'
+# Linux channels to keep the two platforms at parity.
 if [[ "$MODE" == "personal" && "$OS" == "linux" && -x "$DOTFILES_DIR/linux-extras.sh" ]]; then
   info "Installing personal-mode tools that are casks on macOS..."
   "$DOTFILES_DIR/linux-extras.sh" || warning "Some Linux extras failed; see the output above"

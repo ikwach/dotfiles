@@ -3,12 +3,13 @@
 # Personal-mode tools that ship as Homebrew casks on macOS.
 #
 # install.sh strips `cask` lines on Linux, so personal mode there silently ends
-# up without Claude Code, the gcloud CLI and the 1Password CLI -- the installer
-# just prints "install these yourself". This installs them from the vendors'
-# official Linux channels instead.
+# up without the gcloud CLI and the 1Password CLI -- the installer just prints
+# "install these yourself". This installs them from the vendors' official Linux
+# channels instead.
 #
 # Deliberately NOT covered:
 #   claude (desktop app)  - see https://code.claude.com/docs/en/desktop-linux
+#   Claude Code           - install.sh installs it on both OSes, natively
 #
 # Exits non-zero if a tool actually failed to install, so the caller can report
 # it. Tools that are already present, or skipped for want of sudo, are not
@@ -44,24 +45,6 @@ ensure_gnupg() {
   info "Installing gnupg (required to verify the repository keys)..."
   sudo apt-get update -qq && sudo apt-get install -y -qq gnupg
 }
-
-# --- Claude Code -----------------------------------------------------------
-# Native installer; lands in ~/.local/bin/claude and self-updates.
-# https://code.claude.com/docs/en/setup
-#
-# ~/.local/bin is put on PATH by zsh/.zshrc, but this script runs under bash,
-# so check the path directly as well or a re-run downloads it again.
-if command -v claude >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/claude" ]]; then
-  success "Claude Code already installed"
-else
-  info "Installing Claude Code..."
-  if curl -fsSL https://claude.ai/install.sh | bash; then
-    success "Claude Code installed (run 'claude' to sign in)"
-  else
-    warning "Claude Code install failed; see https://code.claude.com/docs/en/setup"
-    failures=$((failures + 1))
-  fi
-fi
 
 # --- Google Cloud CLI ------------------------------------------------------
 # https://docs.cloud.google.com/sdk/docs/install

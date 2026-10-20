@@ -2,9 +2,10 @@
 # On Linux the cask lines are skipped (see install.sh); linux-extras.sh then
 # installs the same tools from their official Linux channels. The Claude
 # desktop app is the exception - see https://code.claude.com/docs/en/desktop-linux
+# Claude Code is not listed: install.sh uses Anthropic's native installer on
+# both OSes, which updates itself where the cask only moved on `brew upgrade`.
 
 # --- AI tooling ---
-cask "claude-code"    # Claude Code CLI
 cask "claude"         # Claude desktop app
 
 # --- Cloud & deploy ---
