@@ -21,7 +21,7 @@ jobs:
 
       - name: Verify installation
         run: |
-          for brew_bin in /opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew" /usr/local/bin/brew; do
+          for brew_bin in /opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew /usr/local/bin/brew; do
             [ -x "$brew_bin" ] && eval "$("$brew_bin" shellenv)" && break
           done
           starship --version
@@ -85,9 +85,7 @@ jobs:
 
       - name: Verify the cask-equivalent tools actually installed
         run: |
-          for brew_bin in /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew"; do
-            [ -x "$brew_bin" ] && eval "$("$brew_bin" shellenv)" && break
-          done
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           # Claude Code goes to ~/.local/bin, which is not on PATH under bash
           test -x "$HOME/.local/bin/claude" || { echo "Claude Code missing"; exit 1; }
           gcloud --version >/dev/null || { echo "gcloud missing"; exit 1; }

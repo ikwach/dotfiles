@@ -43,6 +43,15 @@ esac
 # fails, aborting the installer under set -e.
 have_tty() { (exec 3</dev/tty) 2>/dev/null; }
 
+# Passwordless sudo, or a terminal to ask for the password on -- read from
+# /dev/tty for the same piped-stdin reason as above. Same probe as
+# linux-extras.sh's have_sudo().
+have_sudo() {
+  sudo -n true 2>/dev/null && return 0
+  have_tty || return 1
+  sudo -v </dev/tty 2>/dev/null
+}
+
 # ----------------------------------------
 # Mode selection
 # ----------------------------------------
@@ -84,6 +93,14 @@ echo ""
 # ----------------------------------------
 
 if ! command -v brew >/dev/null 2>&1; then
+  # Homebrew on Linux installs only to /home/linuxbrew/.linuxbrew -- its
+  # installer has no home-directory fallback -- and creating that takes sudo
+  # once. Check up front: otherwise the installer aborts with a bare
+  # "Insufficient permissions" and all this script can say is that brew is
+  # missing.
+  if [[ "$OS" == "linux" ]] && ! [[ -w /home/linuxbrew/.linuxbrew ]] && ! have_sudo; then
+    fail "Homebrew needs sudo once, to create /home/linuxbrew/.linuxbrew. Rerun as a user with sudo, or have an admin create that directory owned by $(id -un)."
+  fi
   if [[ "$OS" == "linux" ]] && command -v apt-get >/dev/null 2>&1; then
     info "Installing Homebrew build dependencies via apt..."
     # gnupg is not a Homebrew dependency, but linux-extras.sh needs it to
@@ -99,15 +116,14 @@ if ! command -v brew >/dev/null 2>&1; then
 fi
 
 # Make brew available in this script and in future login shells
-# ($HOME/.linuxbrew is the installer's fallback when sudo is unavailable)
-for brew_bin in /opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew" /usr/local/bin/brew; do
+for brew_bin in /opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew /usr/local/bin/brew; do
   if [[ -x "$brew_bin" ]]; then
     eval "$("$brew_bin" shellenv)"
     shellenv_line="eval \"\$($brew_bin shellenv)\""
     # Match this exact brew, not any 'brew shellenv' line. Migrating Intel ->
-    # ARM (/usr/local -> /opt/homebrew), or /home/linuxbrew -> ~/.linuxbrew,
-    # otherwise leaves the stale line in place and never adds the right one,
-    # producing a broken login shell that re-running cannot repair.
+    # ARM (/usr/local -> /opt/homebrew) otherwise leaves the stale line in
+    # place and never adds the right one, producing a broken login shell that
+    # re-running cannot repair.
     if ! grep -qxF "$shellenv_line" "$HOME/.zprofile" 2>/dev/null; then
       # Drop a shellenv line pointing at a different prefix. Anchored to the
       # exact shape the installer writes, so a line a user wrote themselves that
