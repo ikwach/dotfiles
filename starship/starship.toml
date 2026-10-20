@@ -80,40 +80,64 @@ truncation_symbol = "…/"
 # p10k-style signalling: the whole git block is green while the tree is clean and
 # flips to yellow the moment git has something to report. starship cannot switch a
 # module's background on state, so the branch chip is drawn by two custom modules
-# under complementary `when` guards -- exactly one of them ever fires.
+# that run the same check and print the branch only in their own state: exactly
+# one of them ever has output, and the ( ) group hides the other completely.
 #
-# The guards have to agree with what git_status renders, or the chip and the
+# The check has to agree with what git_status renders, or the chip and the
 # markers disagree on colour: hence ahead/behind and stashes count as dirty even
-# though both leave the worktree listing empty. The guards run in parallel with
-# starship's own git scan, so a normal repo pays ~3ms; a repo full of large
-# binaries pays for a second `git status` and more like +18ms, because git
-# re-hashes them whenever the stat cache is cold. --no-optional-locks keeps the
-# extra call from ever writing or locking the index.
+# though both leave the worktree listing empty. One porcelain=v2 call reports all
+# of that plus the branch, so each chip costs one sh and one git process. That
+# count matters more than it looks: the chips run in parallel with starship's own
+# git scan, but on a loaded machine (or under on-access antivirus) every exec
+# costs tens of ms. --no-optional-locks keeps the extra calls from ever writing
+# or locking the index.
 [custom.git_clean]
 require_repo = true
+when = true
 shell = ["sh"]
-command = 'git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null'
-format = '[](fg:peach bg:green)[  $output ](fg:crust bg:green)'
-when = '''
-s=$(git --no-optional-locks status --porcelain --branch 2>/dev/null) || exit 1
-[ "$(printf '%s\n' "$s" | wc -l)" -gt 1 ] && exit 1
-case "$s" in *'['*) exit 1 ;; esac
-git rev-parse --verify --quiet refs/stash >/dev/null && exit 1
+command = '''
+s=$(git --no-optional-locks status --porcelain=v2 --branch --show-stash 2>/dev/null) || exit 1
+d=
+while IFS= read -r l; do
+  case $l in
+    '# branch.head '*) b=${l#'# branch.head '} ;;
+    '# branch.ab +0 -0') ;;
+    '# branch.ab '* | '# stash '*) d=1 ;;
+    '#'* | '') ;;
+    *) d=1 ;;
+  esac
+done <<EOF
+$s
+EOF
+[ "$b" = '(detached)' ] && b=$(git rev-parse --short HEAD)
+[ -z "$d" ] && printf '%s' "$b"
 exit 0
 '''
+format = '([](fg:peach bg:green)[  $output ](fg:crust bg:green))'
 
 [custom.git_dirty]
 require_repo = true
+when = true
 shell = ["sh"]
-command = 'git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null'
-format = '[](fg:peach bg:yellow)[  $output ](fg:crust bg:yellow)'
-when = '''
-s=$(git --no-optional-locks status --porcelain --branch 2>/dev/null) || exit 1
-[ "$(printf '%s\n' "$s" | wc -l)" -gt 1 ] && exit 0
-case "$s" in *'['*) exit 0 ;; esac
-git rev-parse --verify --quiet refs/stash >/dev/null && exit 0
-exit 1
+command = '''
+s=$(git --no-optional-locks status --porcelain=v2 --branch --show-stash 2>/dev/null) || exit 1
+d=
+while IFS= read -r l; do
+  case $l in
+    '# branch.head '*) b=${l#'# branch.head '} ;;
+    '# branch.ab +0 -0') ;;
+    '# branch.ab '* | '# stash '*) d=1 ;;
+    '#'* | '') ;;
+    *) d=1 ;;
+  esac
+done <<EOF
+$s
+EOF
+[ "$b" = '(detached)' ] && b=$(git rev-parse --short HEAD)
+[ -n "$d" ] && printf '%s' "$b"
+exit 0
 '''
+format = '([](fg:peach bg:yellow)[  $output ](fg:crust bg:yellow))'
 
 # outside a repo neither chip fires, so nothing would bridge the directory's peach
 # to the language block's green -- this draws that one separator and nothing else
