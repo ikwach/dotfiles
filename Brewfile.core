@@ -23,6 +23,7 @@ brew "tealdeer"       # tldr pages
 
 # --- Development ---
 brew "git"
+brew "git-lfs"        # git/.gitconfig declares the lfs filter as required
 brew "gh"             # GitHub CLI
 brew "lazygit"        # git TUI
 brew "neovim"
