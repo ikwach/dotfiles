@@ -36,6 +36,14 @@ setopt HIST_IGNORE_DUPS   # skip consecutive duplicates
 setopt HIST_IGNORE_SPACE  # commands starting with a space stay out
 
 # ========================================
+# Line editing
+# ========================================
+
+# zsh drops into vi mode whenever EDITOR or VISUAL contains "vi", which nvim
+# does; pin the usual emacs keys (Ctrl+A/E/K/U/W, Alt+B/F) explicitly
+bindkey -e
+
+# ========================================
 # Plugins (antidote)
 # ========================================
 
@@ -160,8 +168,8 @@ if command -v starship >/dev/null; then
   # starship.toml has no right_format, so this only cost an extra starship run
   # per prompt; render it in _starship_render too if one is ever added
   RPROMPT=
-  # zsh starts in vi mode because EDITOR is nvim; re-render so the prompt
-  # character still follows the keymap
+  # Only fires in vi mode (bindkey -v in place of -e above): re-render so the
+  # prompt character still follows the keymap
   starship_zle-keymap-select() {
     _starship_render
     zle reset-prompt
