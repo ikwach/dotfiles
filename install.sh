@@ -534,8 +534,10 @@ else
   fi
 
   if [[ "$gh_authed" == 1 ]]; then
-    # Let git itself push and pull with gh's credentials, not just the API
-    gh auth setup-git >/dev/null 2>&1 || true
+    # No `gh auth setup-git` here: git/.gitconfig already makes gh git's
+    # credential helper, and setup-git writes through the ~/.gitconfig symlink
+    # into the repo, swapping that portable entry for this machine's absolute
+    # path to gh -- which would break every machine whose gh lives elsewhere.
     # `// .login` alone is not enough: an unset display name is null, but a
     # cleared one can be the empty string, and either should fall back.
     git_name="$(gh api user --jq 'if (.name // "") == "" then .login else .name end' 2>/dev/null)" || git_name=""
