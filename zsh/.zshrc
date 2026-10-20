@@ -127,4 +127,33 @@ fi
 # Prompt
 # ========================================
 
-command -v starship >/dev/null && eval "$(starship init zsh)"
+if command -v starship >/dev/null; then
+  eval "$(starship init zsh)"
+
+  # starship's init has zsh run starship from inside PROMPT and RPROMPT each time
+  # the prompt is drawn. A Ctrl+C during that render kills starship, and zsh then
+  # gives up on the prompt: the left side comes out blank and RPROMPT's raw
+  # `$(starship prompt --right ...)` source is printed in its place. Rendering in
+  # precmd instead is safe, because zsh drops an interrupt raised there and keeps
+  # showing the last prompt that did render.
+  _starship_render() {
+    local p
+    p=$(starship prompt --terminal-width="$COLUMNS" --keymap="${KEYMAP:-}" \
+      --status="${STARSHIP_CMD_STATUS:-}" --pipestatus="${STARSHIP_PIPE_STATUS[*]:-}" \
+      --cmd-duration="${STARSHIP_DURATION:-}" --jobs="$STARSHIP_JOBS_COUNT") &&
+      _starship_prompt=$p
+  }
+  add-zsh-hook precmd _starship_render
+  # Expanded at draw time rather than assigned the text: iTerm2's shell
+  # integration wraps PROMPT with its marks in a precmd that runs before ours
+  PROMPT='$_starship_prompt'
+  # starship.toml has no right_format, so this only cost an extra starship run
+  # per prompt; render it in _starship_render too if one is ever added
+  RPROMPT=
+  # zsh starts in vi mode because EDITOR is nvim; re-render so the prompt
+  # character still follows the keymap
+  starship_zle-keymap-select() {
+    _starship_render
+    zle reset-prompt
+  }
+fi
