@@ -92,7 +92,20 @@ echo ""
 # Homebrew
 # ----------------------------------------
 
-if ! command -v brew >/dev/null 2>&1; then
+BREW_CANDIDATES=(/opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew /usr/local/bin/brew)
+
+# Look on disk, not just PATH: a second account on a machine where another
+# user already installed Homebrew has no shellenv line yet, so `command -v`
+# misses it -- and re-running the Homebrew installer then chowns the shared
+# prefix's checkout to this user, locking the owner out.
+brew_installed() {
+  command -v brew >/dev/null 2>&1 && return 0
+  local b
+  for b in "${BREW_CANDIDATES[@]}"; do [[ -x "$b" ]] && return 0; done
+  return 1
+}
+
+if ! brew_installed; then
   # Homebrew on Linux installs only to /home/linuxbrew/.linuxbrew -- its
   # installer has no home-directory fallback -- and creating that takes sudo
   # once. Check up front: otherwise the installer aborts with a bare
@@ -116,7 +129,7 @@ if ! command -v brew >/dev/null 2>&1; then
 fi
 
 # Make brew available in this script and in future login shells
-for brew_bin in /opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew /usr/local/bin/brew; do
+for brew_bin in "${BREW_CANDIDATES[@]}"; do
   if [[ -x "$brew_bin" ]]; then
     eval "$("$brew_bin" shellenv)"
     shellenv_line="eval \"\$($brew_bin shellenv)\""
@@ -147,6 +160,18 @@ for brew_bin in /opt/homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew /usr/
   fi
 done
 command -v brew >/dev/null 2>&1 || fail "Homebrew is not available after install"
+
+# Homebrew supports exactly one account writing to a prefix. Other users get
+# read/execute through PATH and install by running brew as the owner (-H so
+# HOME follows, or brew writes caches into this user's home as the owner).
+# Shadowing brew here routes every brew call below through the owner.
+brew_prefix="$(brew --prefix)"
+brew_owner="$(stat -c %U "$brew_prefix" 2>/dev/null || stat -f %Su "$brew_prefix")"
+if [[ "$brew_owner" != "$(id -un)" ]]; then
+  BREW_BIN="$(command -v brew)"
+  warning "Homebrew at $brew_prefix belongs to $brew_owner; running brew as $brew_owner via sudo"
+  brew() { sudo -H -u "$brew_owner" "$BREW_BIN" "$@"; }
+fi
 success "Homebrew ready"
 
 # A single blocked package (e.g. a cask denied by MDM policy) should not
