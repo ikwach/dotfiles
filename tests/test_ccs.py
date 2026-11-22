@@ -11,6 +11,7 @@ import tempfile
 import time
 import types
 import unittest
+from unittest import mock
 
 sys.dont_write_bytecode = True  # keep bin/ free of __pycache__
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -83,14 +84,23 @@ class CcsTest(unittest.TestCase):
         self.assertEqual(self.ccs.expected_name(folder, True, 2), "project_desk_2_rev")
 
     def test_ptyxis_is_only_chosen_when_there_is_a_display(self):
-        self.ccs.platform.system = lambda: "Linux"
-        self.ccs.shutil.which = lambda name: "/usr/bin/" + name
-        for var in ("WAYLAND_DISPLAY", "DISPLAY"):
-            os.environ.pop(var, None)
-        self.assertEqual(self.ccs.detect_terminal(), "print")
-        os.environ["WAYLAND_DISPLAY"] = "wayland-0"
-        self.assertEqual(self.ccs.detect_terminal(), "ptyxis")
-        os.environ.pop("WAYLAND_DISPLAY")
+        linux = mock.patch.object(self.ccs.platform, "system", lambda: "Linux")
+        found = mock.patch.object(self.ccs.shutil, "which", lambda name: "/usr/bin/" + name)
+        with linux, found, mock.patch.dict(os.environ):
+            for var in ("WAYLAND_DISPLAY", "DISPLAY"):
+                os.environ.pop(var, None)
+            self.assertEqual(self.ccs.detect_terminal(), "print")
+            os.environ["WAYLAND_DISPLAY"] = "wayland-0"
+            self.assertEqual(self.ccs.detect_terminal(), "ptyxis")
+
+    def test_list_accepts_a_second_reviewer_in_a_review_worktree(self):
+        folder = os.path.join(self.tmp.name, "project-wt-review")
+        os.mkdir(folder)
+        self.session(os.getpid(), "r2", cwd=folder, name="project_desk_2_rev")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.ccs.cmd_list(None)
+        self.assertNotIn("pattern:", out.getvalue())
 
     # --- save
 

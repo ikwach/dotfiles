@@ -128,6 +128,7 @@ ccs review      # start a reviewer in ../<repo>-wt-review, named <repo>_<machine
 - On Linux, run `ccs restore` from a Ptyxis tab. Tabs go to whichever Ptyxis window has focus. Without a display (over SSH, or from a console) the commands are printed instead.
 - `ccs restore` uses the newest snapshot from before the last restart and skips sessions that are already running, so it is safe to run twice. `ccs restore --dry-run` shows what it would open.
 - Session names need a short name for the machine in `~/.claude/machine-tag` (for example `home`).
+- `ccs name` prints the name the *next* session in this folder would get. Run inside a session that already has the base name, it prints the `_2` name.
 - Snapshots live in `~/.local/state/claude-sessions/` and never leave the machine. They hold session names and folder paths.
 - To keep snapshots current without thinking about it, call `ccs save --quiet` from a Claude Code `SessionStart` hook.
 

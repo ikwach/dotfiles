@@ -297,15 +297,23 @@ def open_iterm(session, first):
 
 
 def open_ptyxis(session, first):
-    # Not waited for: Ptyxis is a single-instance app, so if it is not running yet this
-    # call becomes the app and would only return when the last window closes.
-    subprocess.Popen(
+    # Ptyxis is a single-instance app. Normally this call hands the tab to the running
+    # app and exits at once; if Ptyxis was not running it becomes the app and stays.
+    # So wait briefly: a quick non-zero exit is a real failure (no display, bad flag),
+    # and still running after that is fine.
+    proc = subprocess.Popen(
         ["ptyxis", "--new-window" if first else "--tab", "-d", session["cwd"], "-T", session["name"] or os.path.basename(session["cwd"]), "--"]
         + in_login_shell(session),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
+    try:
+        code = proc.wait(timeout=1.5)
+    except subprocess.TimeoutExpired:
+        return
+    if code != 0:
+        raise OSError("ptyxis exited with status %d; is there a desktop session to open tabs in?" % code)
 
 
 def detect_terminal():
@@ -442,7 +450,8 @@ def cmd_list(args):
     for s in sessions:
         folder = s["cwd"].replace(home, "~", 1)
         want = expected_name(s["cwd"])
-        ok = re.fullmatch(re.escape(want) + r"(_\d+)?(_rev)?", s["name"] or "")
+        base = want[: -len("_rev")] if want.endswith("_rev") else want
+        ok = re.fullmatch(re.escape(base) + r"(_\d+)?(_rev)?", s["name"] or "")
         print("%-*s  %-7s %s%s" % (width, s["name"], s["_status"], folder, "" if ok else "   (pattern: %s)" % want))
 
 
