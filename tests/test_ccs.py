@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Tests for bin/ccs. Run: python3 tests/test_ccs.py"""
+import contextlib
 import importlib.machinery
 import importlib.util
+import io
 import json
 import os
 import sys
@@ -9,6 +11,7 @@ import tempfile
 import time
 import types
 import unittest
+from unittest import mock
 
 sys.dont_write_bytecode = True  # keep bin/ free of __pycache__
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -68,6 +71,36 @@ class CcsTest(unittest.TestCase):
         self.assertEqual(self.ccs.expected_name("/w/project"), "project_desk")
         self.assertEqual(self.ccs.expected_name("/w/project", True), "project_desk_rev")
         self.assertEqual(self.ccs.expected_name("/w/project-wt-review/"), "project_desk_rev")
+
+    def test_a_second_session_in_the_same_folder_gets_a_number(self):
+        folder = os.path.join(self.tmp.name, "project")
+        os.mkdir(folder)
+        self.assertEqual(self.ccs.free_name(folder), "project_desk")
+        self.session(os.getpid(), "one", cwd=folder, name="project_desk")
+        self.assertEqual(self.ccs.free_name(folder), "project_desk_2")
+        self.assertEqual(self.ccs.free_name(folder, reviewer=True), "project_desk_rev")
+        self.session(os.getppid(), "two", cwd=folder, name="project_desk_2")
+        self.assertEqual(self.ccs.free_name(folder), "project_desk_3")
+        self.assertEqual(self.ccs.expected_name(folder, True, 2), "project_desk_2_rev")
+
+    def test_ptyxis_is_only_chosen_when_there_is_a_display(self):
+        linux = mock.patch.object(self.ccs.platform, "system", lambda: "Linux")
+        found = mock.patch.object(self.ccs.shutil, "which", lambda name: "/usr/bin/" + name)
+        with linux, found, mock.patch.dict(os.environ):
+            for var in ("WAYLAND_DISPLAY", "DISPLAY"):
+                os.environ.pop(var, None)
+            self.assertEqual(self.ccs.detect_terminal(), "print")
+            os.environ["WAYLAND_DISPLAY"] = "wayland-0"
+            self.assertEqual(self.ccs.detect_terminal(), "ptyxis")
+
+    def test_list_accepts_a_second_reviewer_in_a_review_worktree(self):
+        folder = os.path.join(self.tmp.name, "project-wt-review")
+        os.mkdir(folder)
+        self.session(os.getpid(), "r2", cwd=folder, name="project_desk_2_rev")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.ccs.cmd_list(None)
+        self.assertNotIn("pattern:", out.getvalue())
 
     # --- save
 
@@ -135,7 +168,8 @@ class CcsTest(unittest.TestCase):
         self.ccs.boot_time = lambda: 50
         self.assertTrue(self.ccs.pick_snapshot(None).endswith("a.json"))
         self.assertEqual(len(self.ccs.good_snapshots()), 1)
-        self.ccs.cmd_snapshots(None)  # must not raise
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.ccs.cmd_snapshots(None)  # must not raise
 
     # --- restore
 
