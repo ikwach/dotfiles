@@ -171,6 +171,27 @@ class CcsTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.ccs.cmd_snapshots(None)  # must not raise
 
+    def test_a_snapshot_can_be_picked_by_its_label(self):
+        os.makedirs(self.ccs.SNAP_DIR, exist_ok=True)
+        for name, taken, label in [("a", 2000, "before"), ("b", 3000, "before"), ("c", 4000, ""), ("d", 1500, "big-update")]:
+            with open(os.path.join(self.ccs.SNAP_DIR, name + ".json"), "w") as f:
+                json.dump({"taken": taken, "label": label, "sessions": []}, f)
+        self.assertTrue(self.ccs.pick_snapshot("before").endswith("b.json"))
+        self.assertTrue(self.ccs.pick_snapshot(None).endswith("c.json"))
+        self.assertTrue(self.ccs.pick_snapshot("big update").endswith("d.json"))  # cleaned like save does
+        here = os.getcwd()
+        os.chdir(self.tmp.name)  # holds a folder named "state": a label wins over a path that is no snapshot
+        try:
+            with open(os.path.join(self.ccs.SNAP_DIR, "e.json"), "w") as f:
+                json.dump({"taken": 1600, "label": "state", "sessions": []}, f)
+            self.assertTrue(self.ccs.pick_snapshot("state").endswith("e.json"))
+        finally:
+            os.chdir(here)
+        with self.assertRaises(SystemExit):
+            self.ccs.pick_snapshot("nothing-like-this")
+        with self.assertRaises(SystemExit):
+            self.ccs.cmd_save(types.SimpleNamespace(label="2", quiet=True))
+
     # --- restore
 
     def test_restore_skips_running_sessions_missing_folders_and_backslashes(self):

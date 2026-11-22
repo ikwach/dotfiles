@@ -170,7 +170,13 @@ def boot_time():
     return None
 
 
+def clean_label(label):
+    return re.sub(r"[^A-Za-z0-9_-]", "-", label)
+
+
 def cmd_save(args):
+    if args.label and clean_label(args.label).isdigit():
+        die("a label cannot be only digits: `ccs restore %s` means a snapshot number" % args.label)
     sessions = [stored(s) for s in live_sessions()]
     if not sessions:
         if not args.quiet:
@@ -182,7 +188,7 @@ def cmd_save(args):
             print("No change since the last snapshot (%d sessions)." % len(sessions))
         return
     os.makedirs(SNAP_DIR, exist_ok=True)
-    label = re.sub(r"[^A-Za-z0-9_-]", "-", args.label) if args.label else ""
+    label = clean_label(args.label) if args.label else ""
     now = time.time()
     # Milliseconds and the pid keep two saves in the same second apart: the hook can
     # fire for several sessions at once while a restore is opening tabs.
@@ -231,7 +237,8 @@ def cmd_snapshots(args):
 
 
 def pick_snapshot(which):
-    """`which` is a number from `ccs snapshots` (1 is newest) or a file path.
+    """`which` is a number from `ccs snapshots` (1 is newest), a label (the newest
+    snapshot saved with it) or a file path.
 
     With nothing given: the newest snapshot from before the last restart, because
     snapshots taken afterwards only hold whatever has been reopened so far. If this
@@ -239,12 +246,15 @@ def pick_snapshot(which):
     """
     good = good_snapshots()
     if which:
-        if os.path.exists(which):
-            if load_snapshot(which) is None:
-                die("not a readable snapshot: %s" % which)
+        if os.path.isfile(which) and load_snapshot(which) is not None:
             return which
         if which.isdigit() and 1 <= int(which) <= len(good):
             return good[-int(which)][0]
+        labelled = [path for path, snap in good if snap.get("label") and snap["label"] == clean_label(which)]
+        if labelled:
+            return labelled[-1]
+        if os.path.exists(which):
+            die("not a readable snapshot: %s" % which)
         die("no such snapshot: %s (see: ccs snapshots)" % which)
     if not good:
         die("no snapshots yet. Run: ccs save")
@@ -505,7 +515,7 @@ def main():
     p.set_defaults(fn=cmd_save)
 
     p = sub.add_parser("restore", help="reopen the sessions from a snapshot")
-    p.add_argument("snapshot", nargs="?", help="a number from `ccs snapshots` or a file; default: newest before the last restart")
+    p.add_argument("snapshot", nargs="?", help="a number from `ccs snapshots`, a label or a file; default: newest before the last restart")
     p.add_argument("--dry-run", action="store_true", help="show what would be opened")
     p.add_argument("--only", help="only sessions whose name or folder contains this")
     p.add_argument("--terminal", choices=["auto", "iterm", "ptyxis", "print"], default="auto")
