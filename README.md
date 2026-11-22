@@ -116,7 +116,7 @@ A restart kills every running Claude Code session, and each then has to be reope
 
 ```bash
 ccs save        # snapshot every running session (folder, name, session ID)
-ccs restore     # reopen them, one terminal tab each (iTerm2 on macOS, Ptyxis on Linux)
+ccs restore     # reopen them as tabs in the current window (iTerm2 on macOS, Ptyxis on Linux); --new-window for a separate one
 ccs snapshots   # list snapshots; `ccs restore 3` uses the third newest
 ccs list        # running sessions, and whether their names fit the pattern
 ccs new         # start a session in this folder, named <folder>_<machine>

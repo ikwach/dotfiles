@@ -12,7 +12,7 @@
 A restart kills every session and Claude Code forgets which were running, because
 ~/.claude/sessions/ only describes live processes. `ccs save` copies what is needed to
 bring them back into ~/.local/state/claude-sessions/. `ccs restore` then opens a tab per
-session and runs `claude --resume <id>` in its folder. Tabs are opened with iTerm2 on
+session in the current terminal window and runs `claude --resume <id>` in its folder. Tabs are opened with iTerm2 on
 macOS and Ptyxis on Linux; anywhere else the commands are printed.
 
 Snapshots contain session names and folder paths. They stay on this machine.
@@ -356,7 +356,7 @@ def cmd_restore(args):
     for n, s in enumerate(todo):
         print("  open  %s" % (s.get("name") or s["cwd"]))
         try:
-            opener(s, first=(n == 0 and not args.same_window))
+            opener(s, first=(n == 0 and args.new_window))
         except (subprocess.CalledProcessError, OSError) as e:
             die("could not open a tab for %s: %s" % (s.get("name") or s["cwd"], e))
         time.sleep(args.delay)
@@ -448,7 +448,7 @@ def main():
     p.add_argument("--dry-run", action="store_true", help="show what would be opened")
     p.add_argument("--only", help="only sessions whose name or folder contains this")
     p.add_argument("--terminal", choices=["auto", "iterm", "ptyxis", "print"], default="auto")
-    p.add_argument("--same-window", action="store_true", help="add tabs to the current window instead of a new one")
+    p.add_argument("--new-window", action="store_true", help="open the tabs in a new window instead of the current one")
     p.add_argument("--delay", type=float, default=0.6, help="seconds between tabs")
     p.set_defaults(fn=cmd_restore)
 
