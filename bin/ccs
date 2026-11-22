@@ -1,0 +1,478 @@
+#!/usr/bin/env python3
+"""ccs: keep Claude Code sessions across restarts, and name them consistently.
+
+  ccs save                 snapshot every running session (folder, name, session ID)
+  ccs restore              reopen the sessions from a snapshot, one terminal tab each
+  ccs snapshots            list saved snapshots
+  ccs list                 show running sessions and whether their names fit the pattern
+  ccs new                  start a session here, named <folder>_<machine>
+  ccs review               start a reviewer in ../<repo>-wt-review, named <repo>_<machine>_rev
+  ccs name                 print the name a session in this folder should have
+
+A restart kills every session and Claude Code forgets which were running, because
+~/.claude/sessions/ only describes live processes. `ccs save` copies what is needed to
+bring them back into ~/.local/state/claude-sessions/. `ccs restore` then opens a tab per
+session and runs `claude --resume <id>` in its folder. Tabs are opened with iTerm2 on
+macOS and Ptyxis on Linux; anywhere else the commands are printed.
+
+Snapshots contain session names and folder paths. They stay on this machine.
+"""
+import argparse
+import glob
+import json
+import os
+import platform
+import re
+import shlex
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+
+CLAUDE_DIR = os.environ.get("CCS_CLAUDE_DIR") or os.path.expanduser("~/.claude")
+STATE_DIR = os.environ.get("CCS_STATE_DIR") or os.path.join(
+    os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "claude-sessions"
+)
+SNAP_DIR = os.path.join(STATE_DIR, "snapshots")
+KEEP = 80
+REVIEW_SUFFIX = "-wt-review"
+
+
+def die(msg):
+    print("ccs: " + msg, file=sys.stderr)
+    sys.exit(1)
+
+
+# --- running sessions ---------------------------------------------------------
+
+def alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return False  # another user's process; every session of ours runs as us
+    return True
+
+
+def ps_ttys(pids):
+    """{pid: tty} for the given processes, from one ps call."""
+    if not pids:
+        return {}
+    try:
+        out = subprocess.run(
+            ["ps", "-o", "pid=,tty=", "-p", ",".join(str(p) for p in pids)],
+            capture_output=True,
+            text=True,
+        ).stdout
+    except OSError:
+        return {}
+    info = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0].isdigit():
+            info[int(parts[0])] = parts[1]
+    return info
+
+
+def tty_key(tty):
+    return [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", tty)]
+
+
+def live_sessions():
+    """Sessions with a live process, in terminal tab order."""
+    records = []
+    boot = boot_time()
+    for path in glob.glob(os.path.join(CLAUDE_DIR, "sessions", "*.json")):
+        try:
+            with open(path) as f:
+                d = json.load(f)
+        except (OSError, ValueError):
+            continue
+        pid = d.get("pid")
+        if not isinstance(pid, int) or d.get("kind", "interactive") != "interactive":
+            continue
+        if not d.get("sessionId") or not d.get("cwd") or not alive(pid):
+            continue  # a leftover file from a session that is gone
+        started = d.get("startedAt")
+        if boot and isinstance(started, (int, float)) and started < boot * 1000:
+            continue  # left over from before the restart; the pid now belongs to something else
+        records.append(d)
+    info = ps_ttys([d["pid"] for d in records])
+    found = []
+    for d in records:
+        tty = info.get(d["pid"], "")
+        found.append(
+            {
+                "name": d.get("name", ""),
+                "sessionId": d["sessionId"],
+                "cwd": d["cwd"],
+                "_tty": tty,
+                "_status": d.get("status", ""),
+            }
+        )
+    found.sort(key=lambda s: (tty_key(s["_tty"]), s["cwd"]))
+    return found
+
+
+def stored(session):
+    return {k: v for k, v in session.items() if not k.startswith("_")}
+
+
+# --- snapshots ----------------------------------------------------------------
+
+def snapshot_files():
+    return sorted(glob.glob(os.path.join(SNAP_DIR, "*.json")))
+
+
+def load_snapshot(path):
+    """The snapshot, or None if the file is unreadable or not a snapshot."""
+    try:
+        with open(path) as f:
+            snap = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(snap, dict) or not isinstance(snap.get("sessions"), list) or "taken" not in snap:
+        return None
+    return snap
+
+
+def good_snapshots():
+    """[(path, snapshot)] oldest first, leaving out unreadable files.
+
+    Ordered by when each was taken, not by file name: the clock can go back (a
+    laptop flown west, the end of daylight saving), and names must not decide.
+    """
+    out = []
+    for path in snapshot_files():
+        snap = load_snapshot(path)
+        if snap is not None:
+            out.append((path, snap))
+    out.sort(key=lambda item: item[1]["taken"])
+    return out
+
+
+def boot_time():
+    try:
+        if platform.system() == "Darwin":
+            out = subprocess.run(
+                ["sysctl", "-n", "kern.boottime"], capture_output=True, text=True
+            ).stdout
+            return int(re.search(r"sec = (\d+)", out).group(1))
+        with open("/proc/stat") as f:
+            for line in f:
+                if line.startswith("btime "):
+                    return int(line.split()[1])
+    except (OSError, AttributeError, ValueError):
+        pass
+    return None
+
+
+def cmd_save(args):
+    sessions = [stored(s) for s in live_sessions()]
+    if not sessions:
+        if not args.quiet:
+            print("No running sessions, nothing saved.")
+        return
+    good = good_snapshots()
+    if good and not args.label and good[-1][1]["sessions"] == sessions:
+        if not args.quiet:
+            print("No change since the last snapshot (%d sessions)." % len(sessions))
+        return
+    os.makedirs(SNAP_DIR, exist_ok=True)
+    label = re.sub(r"[^A-Za-z0-9_-]", "-", args.label) if args.label else ""
+    now = time.time()
+    # Milliseconds and the pid keep two saves in the same second apart: the hook can
+    # fire for several sessions at once while a restore is opening tabs.
+    name = "%s-%03d-%d%s.json" % (
+        time.strftime("%Y%m%d-%H%M%S", time.gmtime(now)),
+        int(now * 1000) % 1000,
+        os.getpid(),
+        "-" + label if label else "",
+    )
+    path = os.path.join(SNAP_DIR, name)
+    fd, tmp = tempfile.mkstemp(dir=SNAP_DIR, prefix=".tmp-")
+    with os.fdopen(fd, "w") as f:
+        json.dump(
+            {"taken": int(now), "host": socket.gethostname(), "label": label, "sessions": sessions},
+            f,
+            indent=2,
+        )
+        f.write("\n")
+    os.replace(tmp, path)
+    for old, _ in good_snapshots()[:-KEEP]:
+        try:
+            os.remove(old)
+        except OSError:
+            pass
+    if not args.quiet:
+        print("Saved %d sessions to %s" % (len(sessions), path))
+
+
+def describe(snap, boot):
+    when = time.strftime("%a %d %b %H:%M", time.localtime(snap["taken"]))
+    note = snap.get("label") or ""
+    if boot and snap["taken"] < boot:
+        note = (note + ", " if note else "") + "before last restart"
+    return "%s  %2d sessions  %s" % (when, len(snap["sessions"]), note)
+
+
+def cmd_snapshots(args):
+    good = good_snapshots()
+    if not good:
+        print("No snapshots yet. Run: ccs save")
+        return
+    boot = boot_time()
+    chosen = pick_snapshot(None)
+    for n, (path, snap) in enumerate(reversed(good), 1):
+        print("%3d  %s%s" % (n, describe(snap, boot), "   <- restore uses this" if path == chosen else ""))
+
+
+def pick_snapshot(which):
+    """`which` is a number from `ccs snapshots` (1 is newest) or a file path.
+
+    With nothing given: the newest snapshot from before the last restart, because
+    snapshots taken afterwards only hold whatever has been reopened so far. If this
+    machine has not restarted since the first snapshot, the newest one.
+    """
+    good = good_snapshots()
+    if which:
+        if os.path.exists(which):
+            if load_snapshot(which) is None:
+                die("not a readable snapshot: %s" % which)
+            return which
+        if which.isdigit() and 1 <= int(which) <= len(good):
+            return good[-int(which)][0]
+        die("no such snapshot: %s (see: ccs snapshots)" % which)
+    if not good:
+        die("no snapshots yet. Run: ccs save")
+    boot = boot_time()
+    if boot:
+        before = [path for path, snap in good if snap["taken"] < boot]
+        if before:
+            return before[-1]
+    return good[-1][0]
+
+
+# --- restore --------------------------------------------------------------------
+
+def session_command(session):
+    test = os.environ.get("CCS_TEST_COMMAND")  # lets the tab opening be tried without Claude
+    if test:
+        return test
+    # Deliberately no other flags. The only record of how a session was started is `ps`,
+    # which drops quoting, so a kept word could reach the resumed session as a prompt.
+    return "claude --resume " + shlex.quote(session["sessionId"])
+
+
+def in_login_shell(session):
+    """Run the session through a login shell, and leave a shell behind when Claude exits."""
+    shell = os.environ.get("SHELL") or "/bin/sh"
+    inner = "cd %s && %s; exec %s -l" % (shlex.quote(session["cwd"]), session_command(session), shlex.quote(shell))
+    return [shell, "-lic", inner]
+
+
+ITERM_SCRIPT = """
+on run argv
+  set cmd to item 1 of argv
+  tell application "iTerm2"
+    activate
+    if (item 2 of argv) is "window" or (count of windows) = 0 then
+      create window with default profile command cmd
+    else
+      tell current window to create tab with default profile command cmd
+    end if
+  end tell
+end run
+"""
+
+
+def open_iterm(session, first):
+    cmd = " ".join(shlex.quote(part) for part in in_login_shell(session))
+    subprocess.run(
+        ["osascript", "-e", ITERM_SCRIPT, cmd, "window" if first else "tab"], check=True, stdout=subprocess.DEVNULL
+    )
+
+
+def open_ptyxis(session, first):
+    # Not waited for: Ptyxis is a single-instance app, so if it is not running yet this
+    # call becomes the app and would only return when the last window closes.
+    subprocess.Popen(
+        ["ptyxis", "--new-window" if first else "--tab", "-d", session["cwd"], "-T", session["name"] or os.path.basename(session["cwd"]), "--"]
+        + in_login_shell(session),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def detect_terminal():
+    if platform.system() == "Darwin" and (
+        os.path.isdir("/Applications/iTerm.app") or os.path.isdir(os.path.expanduser("~/Applications/iTerm.app"))
+    ):
+        return "iterm"
+    if platform.system() == "Linux" and shutil.which("ptyxis"):
+        return "ptyxis"
+    return "print"
+
+
+def plan_restore(sessions, running, only=None):
+    """Split a snapshot's sessions into those to open and the reasons others are skipped."""
+    todo, skipped = [], []
+    for s in sessions:
+        label = s.get("name") or s["sessionId"][:8]
+        if only and only not in s.get("name", "") and only not in s["cwd"]:
+            continue
+        if s["sessionId"] in running:
+            skipped.append("%s: already running" % label)
+        elif not os.path.isdir(s["cwd"]):
+            skipped.append("%s: folder is gone (%s)" % (label, s["cwd"]))
+        elif "\\" in s["cwd"]:
+            # iTerm2 expands backslash sequences in the command it is given.
+            skipped.append("%s: folder has a backslash, open it by hand (%s)" % (label, s["cwd"]))
+        else:
+            todo.append(s)
+    return todo, skipped
+
+
+def cmd_restore(args):
+    path = pick_snapshot(args.snapshot)
+    snap = load_snapshot(path)
+    todo, skipped = plan_restore(snap["sessions"], {s["sessionId"] for s in live_sessions()}, args.only)
+
+    print("Snapshot: " + describe(snap, boot_time()))
+    for line in skipped:
+        print("  skip  " + line)
+    terminal = args.terminal if args.terminal != "auto" else detect_terminal()
+    if terminal == "print" or args.dry_run:
+        for s in todo:
+            print("  %-44s cd %s && %s" % (s.get("name", ""), shlex.quote(s["cwd"]), session_command(s)))
+        if not args.dry_run and todo and args.terminal == "auto":
+            print("No supported terminal found, so nothing was opened. Run the lines above by hand.")
+        return
+    opener = {"iterm": open_iterm, "ptyxis": open_ptyxis}[terminal]
+    for n, s in enumerate(todo):
+        print("  open  %s" % (s.get("name") or s["cwd"]))
+        try:
+            opener(s, first=(n == 0 and not args.same_window))
+        except (subprocess.CalledProcessError, OSError) as e:
+            die("could not open a tab for %s: %s" % (s.get("name") or s["cwd"], e))
+        time.sleep(args.delay)
+    print("Opened %d, skipped %d." % (len(todo), len(skipped)))
+
+
+# --- names ----------------------------------------------------------------------
+
+def machine_tag():
+    path = os.path.join(CLAUDE_DIR, "machine-tag")
+    try:
+        with open(path) as f:
+            tag = f.read().strip()
+    except OSError:
+        tag = ""
+    if not tag:
+        die("no machine tag. Put a short name for this machine in %s (for example: home)" % path)
+    return tag
+
+
+def expected_name(cwd, reviewer=False):
+    """<folder>_<machine>, with _rev for a reviewer. A folder named <repo>-wt-review is a reviewer."""
+    folder = os.path.basename(os.path.normpath(cwd))
+    if folder.endswith(REVIEW_SUFFIX):
+        folder, reviewer = folder[: -len(REVIEW_SUFFIX)], True
+    return "%s_%s%s" % (folder, machine_tag(), "_rev" if reviewer else "")
+
+
+def cmd_name(args):
+    print(expected_name(os.getcwd(), args.rev))
+
+
+def cmd_new(args):
+    name = expected_name(os.getcwd(), args.rev)
+    print("Starting %s" % name)
+    os.execvp("claude", ["claude", "-n", name] + args.claude_args)
+
+
+def git(*a, cwd=None):
+    return subprocess.run(("git",) + a, cwd=cwd, capture_output=True, text=True)
+
+
+def cmd_review(args):
+    top = git("rev-parse", "--show-toplevel").stdout.strip()
+    if not top:
+        die("not inside a git repository")
+    main = git("worktree", "list", "--porcelain", cwd=top).stdout.split("\n", 1)[0].replace("worktree ", "", 1)
+    repo = os.path.basename(main)
+    worktree = os.path.join(os.path.dirname(main), repo + REVIEW_SUFFIX)
+    if not os.path.isdir(worktree):
+        ref = git("symbolic-ref", "--short", "refs/remotes/origin/HEAD", cwd=main).stdout.strip() or "origin/main"
+        print("Creating %s at %s" % (worktree, ref))
+        subprocess.run(["git", "fetch", "--quiet"], cwd=main, check=False)
+        if subprocess.run(["git", "worktree", "add", "--detach", worktree, ref], cwd=main).returncode != 0:
+            die("could not create the review worktree")
+    os.chdir(worktree)
+    name = expected_name(worktree)
+    print("Starting %s in %s (our own convention, not `claude -w`)" % (name, worktree))
+    os.execvp("claude", ["claude", "-n", name] + args.claude_args)
+
+
+def cmd_list(args):
+    sessions = live_sessions()
+    if not sessions:
+        print("No running sessions.")
+        return
+    home = os.path.expanduser("~")
+    width = max(len(s["name"]) for s in sessions)
+    for s in sessions:
+        folder = s["cwd"].replace(home, "~", 1)
+        want = expected_name(s["cwd"])
+        ok = re.fullmatch(re.escape(want) + r"(_\d+)?(_rev)?", s["name"] or "")
+        print("%-*s  %-7s %s%s" % (width, s["name"], s["_status"], folder, "" if ok else "   (pattern: %s)" % want))
+
+
+# --- command line ---------------------------------------------------------------
+
+def main():
+    ap = argparse.ArgumentParser(prog="ccs", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("save", help="snapshot running sessions")
+    p.add_argument("--label", help="a word to mark this snapshot, e.g. pre-update; always saved")
+    p.add_argument("--quiet", action="store_true")
+    p.set_defaults(fn=cmd_save)
+
+    p = sub.add_parser("restore", help="reopen the sessions from a snapshot")
+    p.add_argument("snapshot", nargs="?", help="a number from `ccs snapshots` or a file; default: newest before the last restart")
+    p.add_argument("--dry-run", action="store_true", help="show what would be opened")
+    p.add_argument("--only", help="only sessions whose name or folder contains this")
+    p.add_argument("--terminal", choices=["auto", "iterm", "ptyxis", "print"], default="auto")
+    p.add_argument("--same-window", action="store_true", help="add tabs to the current window instead of a new one")
+    p.add_argument("--delay", type=float, default=0.6, help="seconds between tabs")
+    p.set_defaults(fn=cmd_restore)
+
+    sub.add_parser("snapshots", help="list saved snapshots").set_defaults(fn=cmd_snapshots)
+    sub.add_parser("list", help="show running sessions").set_defaults(fn=cmd_list)
+
+    p = sub.add_parser("name", help="print the name a session here should have")
+    p.add_argument("--rev", action="store_true", help="reviewer")
+    p.set_defaults(fn=cmd_name)
+
+    p = sub.add_parser("new", help="start a session here with the right name")
+    p.add_argument("--rev", action="store_true", help="reviewer")
+    p.add_argument("claude_args", nargs=argparse.REMAINDER, help="passed to claude")
+    p.set_defaults(fn=cmd_new)
+
+    p = sub.add_parser("review", help="start a reviewer in ../<repo>-wt-review")
+    p.add_argument("claude_args", nargs=argparse.REMAINDER, help="passed to claude")
+    p.set_defaults(fn=cmd_review)
+
+    args = ap.parse_args()
+    if getattr(args, "claude_args", None) and args.claude_args[0] == "--":
+        args.claude_args = args.claude_args[1:]
+    args.fn(args)
+
+
+if __name__ == "__main__":
+    main()
