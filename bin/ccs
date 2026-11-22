@@ -5,9 +5,9 @@
   ccs restore              reopen the sessions from a snapshot, one terminal tab each
   ccs snapshots            list saved snapshots
   ccs list                 show running sessions and whether their names fit the pattern
-  ccs new                  start a session here, named <folder>_<machine>
+  ccs new                  start a session here, named <folder>_<machine> (_2 for a second one)
   ccs review               start a reviewer in ../<repo>-wt-review, named <repo>_<machine>_rev
-  ccs name                 print the name a session in this folder should have
+  ccs name                 print the name the next session in this folder would get
 
 A restart kills every session and Claude Code forgets which were running, because
 ~/.claude/sessions/ only describes live processes. `ccs save` copies what is needed to
@@ -313,7 +313,11 @@ def detect_terminal():
         os.path.isdir("/Applications/iTerm.app") or os.path.isdir(os.path.expanduser("~/Applications/iTerm.app"))
     ):
         return "iterm"
-    if platform.system() == "Linux" and shutil.which("ptyxis"):
+    # Ptyxis needs the desktop session. Over SSH or from a console there is no display,
+    # and it would fail without a word, so the commands are printed instead.
+    if platform.system() == "Linux" and shutil.which("ptyxis") and (
+        os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")
+    ):
         return "ptyxis"
     return "print"
 
@@ -377,20 +381,30 @@ def machine_tag():
     return tag
 
 
-def expected_name(cwd, reviewer=False):
-    """<folder>_<machine>, with _rev for a reviewer. A folder named <repo>-wt-review is a reviewer."""
+def expected_name(cwd, reviewer=False, number=1):
+    """<folder>_<machine>, then _2, _3... for further sessions in the same folder, then _rev
+    for a reviewer. A folder named <repo>-wt-review is a reviewer."""
     folder = os.path.basename(os.path.normpath(cwd))
     if folder.endswith(REVIEW_SUFFIX):
         folder, reviewer = folder[: -len(REVIEW_SUFFIX)], True
-    return "%s_%s%s" % (folder, machine_tag(), "_rev" if reviewer else "")
+    return "%s_%s%s%s" % (folder, machine_tag(), "_%d" % number if number > 1 else "", "_rev" if reviewer else "")
+
+
+def free_name(cwd, reviewer=False):
+    """The first name for this folder that no running session already has."""
+    taken = {s["name"] for s in live_sessions()}
+    number = 1
+    while expected_name(cwd, reviewer, number) in taken:
+        number += 1
+    return expected_name(cwd, reviewer, number)
 
 
 def cmd_name(args):
-    print(expected_name(os.getcwd(), args.rev))
+    print(free_name(os.getcwd(), args.rev))
 
 
 def cmd_new(args):
-    name = expected_name(os.getcwd(), args.rev)
+    name = free_name(os.getcwd(), args.rev)
     print("Starting %s" % name)
     os.execvp("claude", ["claude", "-n", name] + args.claude_args)
 
@@ -413,7 +427,7 @@ def cmd_review(args):
         if subprocess.run(["git", "worktree", "add", "--detach", worktree, ref], cwd=main).returncode != 0:
             die("could not create the review worktree")
     os.chdir(worktree)
-    name = expected_name(worktree)
+    name = free_name(worktree)
     print("Starting %s in %s (our own convention, not `claude -w`)" % (name, worktree))
     os.execvp("claude", ["claude", "-n", name] + args.claude_args)
 

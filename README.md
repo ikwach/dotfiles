@@ -119,13 +119,13 @@ ccs save        # snapshot every running session (folder, name, session ID)
 ccs restore     # reopen them as tabs in the current window (iTerm2 on macOS, Ptyxis on Linux); --new-window for a separate one
 ccs snapshots   # list snapshots; `ccs restore 3` uses the third newest
 ccs list        # running sessions, and whether their names fit the pattern
-ccs new         # start a session in this folder, named <folder>_<machine>
+ccs new         # start a session in this folder, named <folder>_<machine> (_2 for a second one there)
 ccs review      # start a reviewer in ../<repo>-wt-review, named <repo>_<machine>_rev
 ```
 
 - `osup` runs `ccs save` first. On macOS it ends by restarting, so afterwards: log in, open a terminal, run `ccs restore`. On Linux `osup` does not restart; the snapshot is there for whenever you do.
 - A restored session is resumed by its ID with no other flags. If you started one with extra flags such as `--add-dir`, add them again by hand.
-- On Linux, run `ccs restore` from a Ptyxis tab.
+- On Linux, run `ccs restore` from a Ptyxis tab. Tabs go to whichever Ptyxis window has focus. Without a display (over SSH, or from a console) the commands are printed instead.
 - `ccs restore` uses the newest snapshot from before the last restart and skips sessions that are already running, so it is safe to run twice. `ccs restore --dry-run` shows what it would open.
 - Session names need a short name for the machine in `~/.claude/machine-tag` (for example `home`).
 - Snapshots live in `~/.local/state/claude-sessions/` and never leave the machine. They hold session names and folder paths.
