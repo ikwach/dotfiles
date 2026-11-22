@@ -197,6 +197,19 @@ class CcsTest(unittest.TestCase):
         self.assertEqual((shell, flag), ("/bin/zsh", "-lic"))
         self.assertEqual(inner, "cd '/w/my project' && claude --resume abc-123; exec /bin/zsh -l")
 
+    def test_restore_with_rename_names_each_session_after_its_folder(self):
+        sessions = [
+            {"name": "old-a", "sessionId": "1", "cwd": "/w/project"},
+            {"name": "old-b", "sessionId": "2", "cwd": "/w/project"},
+            {"name": "old-c", "sessionId": "3", "cwd": "/w/project-wt-review"},
+            {"name": "old-d", "sessionId": "4", "cwd": "/w/other"},
+        ]
+        self.ccs.plan_renames(sessions, {"other_desk"})
+        self.assertEqual(
+            [s["rename"] for s in sessions], ["project_desk", "project_desk_2", "project_desk_rev", "other_desk_2"]
+        )
+        self.assertEqual(self.ccs.session_command(sessions[1]), "claude --resume 2 -n project_desk_2")
+
 
 if __name__ == "__main__":
     unittest.main()
