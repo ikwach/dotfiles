@@ -267,7 +267,7 @@ def session_command(session):
     # session as a prompt. A new name, when asked for, is built here from the folder.
     cmd = "claude --resume " + shlex.quote(session["sessionId"])
     if session.get("rename"):
-        cmd += " -n " + shlex.quote(session["rename"])
+        cmd += " " + shlex.quote("--name=" + session["rename"])
     return cmd
 
 
@@ -353,11 +353,29 @@ def plan_restore(sessions, running, only=None):
     return todo, skipped
 
 
+def fits_pattern(name, cwd):
+    """Whether `name` is already a pattern name for this folder, with any number."""
+    want = expected_name(cwd)
+    rev = "_rev" if want.endswith("_rev") else ""
+    base = want[: -len(rev)] if rev else want
+    return bool(re.fullmatch(re.escape(base) + r"(_\d+)?" + rev, name or ""))
+
+
 def plan_renames(todo, taken):
-    """Give each session to open the pattern name for its folder, numbering past names
-    that running sessions or earlier ones in this restore already have."""
+    """Give each session to open the pattern name for its folder.
+
+    A session whose name already fits keeps it, so two correctly named sessions never
+    swap: sessions message each other by name. The rest are numbered past names that
+    running sessions or others in this restore have."""
     taken = set(taken)
     for s in todo:
+        s.pop("rename", None)
+        if fits_pattern(s.get("name"), s["cwd"]) and s["name"] not in taken:
+            s["rename"] = s["name"]
+            taken.add(s["name"])
+    for s in todo:
+        if "rename" in s:
+            continue
         number = 1
         while expected_name(s["cwd"], number=number) in taken:
             number += 1

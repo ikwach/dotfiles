@@ -208,7 +208,20 @@ class CcsTest(unittest.TestCase):
         self.assertEqual(
             [s["rename"] for s in sessions], ["project_desk", "project_desk_2", "project_desk_rev", "other_desk_2"]
         )
-        self.assertEqual(self.ccs.session_command(sessions[1]), "claude --resume 2 -n project_desk_2")
+        self.assertEqual(self.ccs.session_command(sessions[1]), "claude --resume 2 --name=project_desk_2")
+
+    def test_rename_keeps_names_that_already_fit_so_two_sessions_never_swap(self):
+        sessions = [
+            {"name": "project_desk_2", "sessionId": "1", "cwd": "/w/project"},
+            {"name": "project_desk", "sessionId": "2", "cwd": "/w/project"},
+            {"name": "old", "sessionId": "3", "cwd": "/w/project"},
+            {"name": "project_desk", "sessionId": "4", "cwd": "/w/moved here"},
+        ]
+        self.ccs.plan_renames(sessions, set())
+        self.assertEqual(
+            [s["rename"] for s in sessions], ["project_desk_2", "project_desk", "project_desk_3", "moved here_desk"]
+        )
+        self.assertEqual(self.ccs.session_command(sessions[3]), "claude --resume 4 '--name=moved here_desk'")
 
 
 if __name__ == "__main__":
