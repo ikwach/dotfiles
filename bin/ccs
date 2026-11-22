@@ -262,9 +262,13 @@ def session_command(session):
     test = os.environ.get("CCS_TEST_COMMAND")  # lets the tab opening be tried without Claude
     if test:
         return test
-    # Deliberately no other flags. The only record of how a session was started is `ps`,
-    # which drops quoting, so a kept word could reach the resumed session as a prompt.
-    return "claude --resume " + shlex.quote(session["sessionId"])
+    # Deliberately no flags from the old command line. The only record of how a session
+    # was started is `ps`, which drops quoting, so a kept word could reach the resumed
+    # session as a prompt. A new name, when asked for, is built here from the folder.
+    cmd = "claude --resume " + shlex.quote(session["sessionId"])
+    if session.get("rename"):
+        cmd += " " + shlex.quote("--name=" + session["rename"])
+    return cmd
 
 
 def in_login_shell(session):
@@ -302,7 +306,7 @@ def open_ptyxis(session, first):
     # So wait briefly: a quick non-zero exit is a real failure (no display, bad flag),
     # and still running after that is fine.
     proc = subprocess.Popen(
-        ["ptyxis", "--new-window" if first else "--tab", "-d", session["cwd"], "-T", session["name"] or os.path.basename(session["cwd"]), "--"]
+        ["ptyxis", "--new-window" if first else "--tab", "-d", session["cwd"], "-T", session.get("rename") or session["name"] or os.path.basename(session["cwd"]), "--"]
         + in_login_shell(session),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -349,10 +353,45 @@ def plan_restore(sessions, running, only=None):
     return todo, skipped
 
 
+def fits_pattern(name, cwd):
+    """Whether `name` is already a pattern name for this folder, with any number. _rev is
+    optional in an ordinary folder, since `ccs new --rev` names a reviewer there, and
+    required in a review worktree."""
+    want = expected_name(cwd)
+    base, rev = (want[: -len("_rev")], "_rev") if want.endswith("_rev") else (want, "(_rev)?")
+    return bool(re.fullmatch(re.escape(base) + r"(_\d+)?" + rev, name or ""))
+
+
+def plan_renames(todo, taken):
+    """Give each session to open the pattern name for its folder.
+
+    A session whose name already fits keeps it, so two correctly named sessions never
+    swap: sessions message each other by name. The rest are numbered past names that
+    running sessions or others in this restore have."""
+    taken = set(taken)
+    for s in todo:
+        s.pop("rename", None)
+        if fits_pattern(s.get("name"), s["cwd"]) and s["name"] not in taken:
+            s["rename"] = s["name"]
+            taken.add(s["name"])
+    for s in todo:
+        if "rename" in s:
+            continue
+        reviewer = (s.get("name") or "").endswith("_rev")  # stays a reviewer in any folder
+        number = 1
+        while expected_name(s["cwd"], reviewer, number) in taken:
+            number += 1
+        s["rename"] = expected_name(s["cwd"], reviewer, number)
+        taken.add(s["rename"])
+
+
 def cmd_restore(args):
     path = pick_snapshot(args.snapshot)
     snap = load_snapshot(path)
-    todo, skipped = plan_restore(snap["sessions"], {s["sessionId"] for s in live_sessions()}, args.only)
+    running = live_sessions()
+    todo, skipped = plan_restore(snap["sessions"], {s["sessionId"] for s in running}, args.only)
+    if args.rename:
+        plan_renames(todo, {s["name"] for s in running})
 
     print("Snapshot: " + describe(snap, boot_time()))
     for line in skipped:
@@ -360,13 +399,13 @@ def cmd_restore(args):
     terminal = args.terminal if args.terminal != "auto" else detect_terminal()
     if terminal == "print" or args.dry_run:
         for s in todo:
-            print("  %-44s cd %s && %s" % (s.get("name", ""), shlex.quote(s["cwd"]), session_command(s)))
+            print("  %-44s cd %s && %s" % (s.get("rename") or s.get("name", ""), shlex.quote(s["cwd"]), session_command(s)))
         if not args.dry_run and todo and args.terminal == "auto":
             print("No supported terminal found, so nothing was opened. Run the lines above by hand.")
         return
     opener = {"iterm": open_iterm, "ptyxis": open_ptyxis}[terminal]
     for n, s in enumerate(todo):
-        print("  open  %s" % (s.get("name") or s["cwd"]))
+        print("  open  %s" % (s.get("rename") or s.get("name") or s["cwd"]))
         try:
             opener(s, first=(n == 0 and args.new_window))
         except (subprocess.CalledProcessError, OSError) as e:
@@ -450,8 +489,7 @@ def cmd_list(args):
     for s in sessions:
         folder = s["cwd"].replace(home, "~", 1)
         want = expected_name(s["cwd"])
-        base = want[: -len("_rev")] if want.endswith("_rev") else want
-        ok = re.fullmatch(re.escape(base) + r"(_\d+)?(_rev)?", s["name"] or "")
+        ok = fits_pattern(s["name"], s["cwd"])
         print("%-*s  %-7s %s%s" % (width, s["name"], s["_status"], folder, "" if ok else "   (pattern: %s)" % want))
 
 
@@ -473,6 +511,7 @@ def main():
     p.add_argument("--terminal", choices=["auto", "iterm", "ptyxis", "print"], default="auto")
     p.add_argument("--new-window", action="store_true", help="open the tabs in a new window instead of the current one")
     p.add_argument("--delay", type=float, default=0.6, help="seconds between tabs")
+    p.add_argument("--rename", action="store_true", help="give each session the pattern name for the folder it opens in")
     p.set_defaults(fn=cmd_restore)
 
     sub.add_parser("snapshots", help="list saved snapshots").set_defaults(fn=cmd_snapshots)

@@ -197,6 +197,46 @@ class CcsTest(unittest.TestCase):
         self.assertEqual((shell, flag), ("/bin/zsh", "-lic"))
         self.assertEqual(inner, "cd '/w/my project' && claude --resume abc-123; exec /bin/zsh -l")
 
+    def test_restore_with_rename_names_each_session_after_its_folder(self):
+        sessions = [
+            {"name": "old-a", "sessionId": "1", "cwd": "/w/project"},
+            {"name": "old-b", "sessionId": "2", "cwd": "/w/project"},
+            {"name": "old-c", "sessionId": "3", "cwd": "/w/project-wt-review"},
+            {"name": "old-d", "sessionId": "4", "cwd": "/w/other"},
+        ]
+        self.ccs.plan_renames(sessions, {"other_desk"})
+        self.assertEqual(
+            [s["rename"] for s in sessions], ["project_desk", "project_desk_2", "project_desk_rev", "other_desk_2"]
+        )
+        self.assertEqual(self.ccs.session_command(sessions[1]), "claude --resume 2 --name=project_desk_2")
+
+    def test_rename_keeps_names_that_already_fit_so_two_sessions_never_swap(self):
+        sessions = [
+            {"name": "project_desk_2", "sessionId": "1", "cwd": "/w/project"},
+            {"name": "project_desk", "sessionId": "2", "cwd": "/w/project"},
+            {"name": "old", "sessionId": "3", "cwd": "/w/project"},
+            {"name": "project_desk", "sessionId": "4", "cwd": "/w/moved here"},
+        ]
+        self.ccs.plan_renames(sessions, set())
+        self.assertEqual(
+            [s["rename"] for s in sessions], ["project_desk_2", "project_desk", "project_desk_3", "moved here_desk"]
+        )
+        self.assertEqual(self.ccs.session_command(sessions[3]), "claude --resume 4 '--name=moved here_desk'")
+
+    def test_rename_keeps_a_reviewer_a_reviewer_and_respects_running_names(self):
+        sessions = [
+            {"name": "project_desk", "sessionId": "1", "cwd": "/w/project"},
+            {"name": "project_desk_rev", "sessionId": "2", "cwd": "/w/project"},
+            {"name": "other_desk_rev", "sessionId": "3", "cwd": "/w/project"},
+            {"name": "thing_desk", "sessionId": "4", "cwd": "/w/thing"},
+            {"name": "more_desk", "sessionId": "5", "cwd": "/w/more-wt-review"},
+            {"name": "more_desk", "sessionId": "6", "cwd": "/w/more"},
+        ]
+        self.ccs.plan_renames(sessions, {"thing_desk"})  # a running session holds that name
+        self.assertEqual(
+            [s["rename"] for s in sessions], ["project_desk", "project_desk_rev", "project_desk_2_rev", "thing_desk_2", "more_desk_rev", "more_desk"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
