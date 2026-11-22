@@ -28,6 +28,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 
 CLAUDE_DIR = os.environ.get("CCS_CLAUDE_DIR") or os.path.expanduser("~/.claude")
@@ -56,13 +57,13 @@ def alive(pid):
     return True
 
 
-def ps_info(pids):
-    """{pid: (tty, args)} for the given processes, from one ps call."""
+def ps_ttys(pids):
+    """{pid: tty} for the given processes, from one ps call."""
     if not pids:
         return {}
     try:
         out = subprocess.run(
-            ["ps", "-o", "pid=,tty=,args=", "-p", ",".join(str(p) for p in pids)],
+            ["ps", "-o", "pid=,tty=", "-p", ",".join(str(p) for p in pids)],
             capture_output=True,
             text=True,
         ).stdout
@@ -70,9 +71,9 @@ def ps_info(pids):
         return {}
     info = {}
     for line in out.splitlines():
-        parts = line.split(None, 2)
+        parts = line.split()
         if len(parts) >= 2 and parts[0].isdigit():
-            info[int(parts[0])] = (parts[1], parts[2] if len(parts) > 2 else "")
+            info[int(parts[0])] = parts[1]
     return info
 
 
@@ -80,32 +81,10 @@ def tty_key(tty):
     return [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", tty)]
 
 
-def extra_flags(args):
-    """The flags a session was started with, minus the ones restore supplies itself."""
-    try:
-        tokens = shlex.split(args)[1:]
-    except ValueError:
-        return []
-    out, i = [], 0
-    while i < len(tokens):
-        t = tokens[i]
-        takes_value = t in ("--resume", "-r", "--name", "-n")
-        if takes_value or t in ("--continue", "-c"):
-            i += 1
-            if takes_value and i < len(tokens) and not tokens[i].startswith("-"):
-                i += 1
-            continue
-        if t.startswith(("--resume=", "--name=")):
-            i += 1
-            continue
-        out.append(t)
-        i += 1
-    return out
-
-
 def live_sessions():
     """Sessions with a live process, in terminal tab order."""
     records = []
+    boot = boot_time()
     for path in glob.glob(os.path.join(CLAUDE_DIR, "sessions", "*.json")):
         try:
             with open(path) as f:
@@ -117,17 +96,19 @@ def live_sessions():
             continue
         if not d.get("sessionId") or not d.get("cwd") or not alive(pid):
             continue  # a leftover file from a session that is gone
+        started = d.get("startedAt")
+        if boot and isinstance(started, (int, float)) and started < boot * 1000:
+            continue  # left over from before the restart; the pid now belongs to something else
         records.append(d)
-    info = ps_info([d["pid"] for d in records])
+    info = ps_ttys([d["pid"] for d in records])
     found = []
     for d in records:
-        tty, args = info.get(d["pid"], ("", ""))
+        tty = info.get(d["pid"], "")
         found.append(
             {
                 "name": d.get("name", ""),
                 "sessionId": d["sessionId"],
                 "cwd": d["cwd"],
-                "flags": extra_flags(args),
                 "_tty": tty,
                 "_status": d.get("status", ""),
             }
@@ -147,8 +128,25 @@ def snapshot_files():
 
 
 def load_snapshot(path):
-    with open(path) as f:
-        return json.load(f)
+    """The snapshot, or None if the file is unreadable or not a snapshot."""
+    try:
+        with open(path) as f:
+            snap = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(snap, dict) or not isinstance(snap.get("sessions"), list) or "taken" not in snap:
+        return None
+    return snap
+
+
+def good_snapshots():
+    """[(path, snapshot)] oldest first, leaving out unreadable files."""
+    out = []
+    for path in snapshot_files():
+        snap = load_snapshot(path)
+        if snap is not None:
+            out.append((path, snap))
+    return out
 
 
 def boot_time():
@@ -173,36 +171,42 @@ def cmd_save(args):
         if not args.quiet:
             print("No running sessions, nothing saved.")
         return
-    files = snapshot_files()
-    if files and not args.label:
-        try:
-            if load_snapshot(files[-1]).get("sessions") == sessions:
-                if not args.quiet:
-                    print("No change since the last snapshot (%d sessions)." % len(sessions))
-                return
-        except (OSError, ValueError):
-            pass
+    good = good_snapshots()
+    if good and not args.label and good[-1][1]["sessions"] == sessions:
+        if not args.quiet:
+            print("No change since the last snapshot (%d sessions)." % len(sessions))
+        return
     os.makedirs(SNAP_DIR, exist_ok=True)
     label = re.sub(r"[^A-Za-z0-9_-]", "-", args.label) if args.label else ""
-    name = time.strftime("%Y%m%d-%H%M%S") + ("-" + label if label else "") + ".json"
+    now = time.time()
+    # Milliseconds and the pid keep two saves in the same second apart: the hook can
+    # fire for several sessions at once while a restore is opening tabs.
+    name = "%s-%03d-%d%s.json" % (
+        time.strftime("%Y%m%d-%H%M%S", time.localtime(now)),
+        int(now * 1000) % 1000,
+        os.getpid(),
+        "-" + label if label else "",
+    )
     path = os.path.join(SNAP_DIR, name)
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
+    fd, tmp = tempfile.mkstemp(dir=SNAP_DIR, prefix=".tmp-")
+    with os.fdopen(fd, "w") as f:
         json.dump(
-            {"taken": int(time.time()), "host": socket.gethostname(), "label": label, "sessions": sessions},
+            {"taken": int(now), "host": socket.gethostname(), "label": label, "sessions": sessions},
             f,
             indent=2,
         )
         f.write("\n")
     os.replace(tmp, path)
     for old in snapshot_files()[:-KEEP]:
-        os.remove(old)
+        try:
+            os.remove(old)
+        except OSError:
+            pass
     if not args.quiet:
         print("Saved %d sessions to %s" % (len(sessions), path))
 
 
-def describe(path, boot):
-    snap = load_snapshot(path)
+def describe(snap, boot):
     when = time.strftime("%a %d %b %H:%M", time.localtime(snap["taken"]))
     note = snap.get("label") or ""
     if boot and snap["taken"] < boot:
@@ -211,14 +215,14 @@ def describe(path, boot):
 
 
 def cmd_snapshots(args):
-    files = snapshot_files()
-    if not files:
+    good = good_snapshots()
+    if not good:
         print("No snapshots yet. Run: ccs save")
         return
     boot = boot_time()
     chosen = pick_snapshot(None)
-    for n, path in enumerate(reversed(files), 1):
-        print("%3d  %s%s" % (n, describe(path, boot), "   <- restore uses this" if path == chosen else ""))
+    for n, (path, snap) in enumerate(reversed(good), 1):
+        print("%3d  %s%s" % (n, describe(snap, boot), "   <- restore uses this" if path == chosen else ""))
 
 
 def pick_snapshot(which):
@@ -228,21 +232,23 @@ def pick_snapshot(which):
     snapshots taken afterwards only hold whatever has been reopened so far. If this
     machine has not restarted since the first snapshot, the newest one.
     """
-    files = snapshot_files()
+    good = good_snapshots()
     if which:
         if os.path.exists(which):
+            if load_snapshot(which) is None:
+                die("not a readable snapshot: %s" % which)
             return which
-        if which.isdigit() and 1 <= int(which) <= len(files):
-            return files[-int(which)]
+        if which.isdigit() and 1 <= int(which) <= len(good):
+            return good[-int(which)][0]
         die("no such snapshot: %s (see: ccs snapshots)" % which)
-    if not files:
+    if not good:
         die("no snapshots yet. Run: ccs save")
     boot = boot_time()
     if boot:
-        before = [p for p in files if load_snapshot(p)["taken"] < boot]
+        before = [path for path, snap in good if snap["taken"] < boot]
         if before:
             return before[-1]
-    return files[-1]
+    return good[-1][0]
 
 
 # --- restore --------------------------------------------------------------------
@@ -251,7 +257,9 @@ def session_command(session):
     test = os.environ.get("CCS_TEST_COMMAND")  # lets the tab opening be tried without Claude
     if test:
         return test
-    return " ".join(["claude", "--resume", shlex.quote(session["sessionId"])] + [shlex.quote(f) for f in session.get("flags", [])])
+    # Deliberately no other flags. The only record of how a session was started is `ps`,
+    # which drops quoting, so a kept word could reach the resumed session as a prompt.
+    return "claude --resume " + shlex.quote(session["sessionId"])
 
 
 def in_login_shell(session):
@@ -284,10 +292,14 @@ def open_iterm(session, first):
 
 
 def open_ptyxis(session, first):
-    subprocess.run(
+    # Not waited for: Ptyxis is a single-instance app, so if it is not running yet this
+    # call becomes the app and would only return when the last window closes.
+    subprocess.Popen(
         ["ptyxis", "--new-window" if first else "--tab", "-d", session["cwd"], "-T", session["name"] or os.path.basename(session["cwd"]), "--"]
         + in_login_shell(session),
-        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
     )
 
 
@@ -301,39 +313,47 @@ def detect_terminal():
     return "print"
 
 
-def cmd_restore(args):
-    path = pick_snapshot(args.snapshot)
-    snap = load_snapshot(path)
-    running = {s["sessionId"] for s in live_sessions()}
+def plan_restore(sessions, running, only=None):
+    """Split a snapshot's sessions into those to open and the reasons others are skipped."""
     todo, skipped = [], []
-    for s in snap["sessions"]:
-        label = s["name"] or s["sessionId"][:8]
-        if args.only and args.only not in s["name"] and args.only not in s["cwd"]:
+    for s in sessions:
+        label = s.get("name") or s["sessionId"][:8]
+        if only and only not in s.get("name", "") and only not in s["cwd"]:
             continue
         if s["sessionId"] in running:
             skipped.append("%s: already running" % label)
         elif not os.path.isdir(s["cwd"]):
             skipped.append("%s: folder is gone (%s)" % (label, s["cwd"]))
+        elif "\\" in s["cwd"]:
+            # iTerm2 expands backslash sequences in the command it is given.
+            skipped.append("%s: folder has a backslash, open it by hand (%s)" % (label, s["cwd"]))
         else:
             todo.append(s)
+    return todo, skipped
 
-    print("Snapshot: " + describe(path, boot_time()))
+
+def cmd_restore(args):
+    path = pick_snapshot(args.snapshot)
+    snap = load_snapshot(path)
+    todo, skipped = plan_restore(snap["sessions"], {s["sessionId"] for s in live_sessions()}, args.only)
+
+    print("Snapshot: " + describe(snap, boot_time()))
     for line in skipped:
         print("  skip  " + line)
     terminal = args.terminal if args.terminal != "auto" else detect_terminal()
     if terminal == "print" or args.dry_run:
         for s in todo:
-            print("  %-44s cd %s && %s" % (s["name"], shlex.quote(s["cwd"]), session_command(s)))
+            print("  %-44s cd %s && %s" % (s.get("name", ""), shlex.quote(s["cwd"]), session_command(s)))
         if not args.dry_run and todo and args.terminal == "auto":
             print("No supported terminal found, so nothing was opened. Run the lines above by hand.")
         return
     opener = {"iterm": open_iterm, "ptyxis": open_ptyxis}[terminal]
     for n, s in enumerate(todo):
-        print("  open  %s" % (s["name"] or s["cwd"]))
+        print("  open  %s" % (s.get("name") or s["cwd"]))
         try:
             opener(s, first=(n == 0 and not args.same_window))
         except (subprocess.CalledProcessError, OSError) as e:
-            die("could not open a tab for %s: %s" % (s["name"], e))
+            die("could not open a tab for %s: %s" % (s.get("name") or s["cwd"], e))
         time.sleep(args.delay)
     print("Opened %d, skipped %d." % (len(todo), len(skipped)))
 
