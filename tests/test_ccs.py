@@ -223,6 +223,18 @@ class CcsTest(unittest.TestCase):
         )
         self.assertEqual(self.ccs.session_command(sessions[3]), "claude --resume 4 '--name=moved here_desk'")
 
+    def test_rename_keeps_a_reviewer_a_reviewer_and_respects_running_names(self):
+        sessions = [
+            {"name": "project_desk", "sessionId": "1", "cwd": "/w/project"},
+            {"name": "project_desk_rev", "sessionId": "2", "cwd": "/w/project"},
+            {"name": "other_desk_rev", "sessionId": "3", "cwd": "/w/project"},
+            {"name": "thing_desk", "sessionId": "4", "cwd": "/w/thing"},
+        ]
+        self.ccs.plan_renames(sessions, {"thing_desk"})  # a running session holds that name
+        self.assertEqual(
+            [s["rename"] for s in sessions], ["project_desk", "project_desk_rev", "project_desk_2_rev", "thing_desk_2"]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

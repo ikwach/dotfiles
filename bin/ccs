@@ -354,11 +354,11 @@ def plan_restore(sessions, running, only=None):
 
 
 def fits_pattern(name, cwd):
-    """Whether `name` is already a pattern name for this folder, with any number."""
+    """Whether `name` is already a pattern name for this folder: any number, and _rev or
+    not, since `ccs new --rev` names a reviewer in an ordinary folder."""
     want = expected_name(cwd)
-    rev = "_rev" if want.endswith("_rev") else ""
-    base = want[: -len(rev)] if rev else want
-    return bool(re.fullmatch(re.escape(base) + r"(_\d+)?" + rev, name or ""))
+    base = want[: -len("_rev")] if want.endswith("_rev") else want
+    return bool(re.fullmatch(re.escape(base) + r"(_\d+)?(_rev)?", name or ""))
 
 
 def plan_renames(todo, taken):
@@ -376,10 +376,11 @@ def plan_renames(todo, taken):
     for s in todo:
         if "rename" in s:
             continue
+        reviewer = (s.get("name") or "").endswith("_rev")  # stays a reviewer in any folder
         number = 1
-        while expected_name(s["cwd"], number=number) in taken:
+        while expected_name(s["cwd"], reviewer, number) in taken:
             number += 1
-        s["rename"] = expected_name(s["cwd"], number=number)
+        s["rename"] = expected_name(s["cwd"], reviewer, number)
         taken.add(s["rename"])
 
 
@@ -487,8 +488,7 @@ def cmd_list(args):
     for s in sessions:
         folder = s["cwd"].replace(home, "~", 1)
         want = expected_name(s["cwd"])
-        base = want[: -len("_rev")] if want.endswith("_rev") else want
-        ok = re.fullmatch(re.escape(base) + r"(_\d+)?(_rev)?", s["name"] or "")
+        ok = fits_pattern(s["name"], s["cwd"])
         print("%-*s  %-7s %s%s" % (width, s["name"], s["_status"], folder, "" if ok else "   (pattern: %s)" % want))
 
 
