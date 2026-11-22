@@ -170,7 +170,13 @@ def boot_time():
     return None
 
 
+def clean_label(label):
+    return re.sub(r"[^A-Za-z0-9_-]", "-", label)
+
+
 def cmd_save(args):
+    if args.label and clean_label(args.label).isdigit():
+        die("a label cannot be only digits: `ccs restore %s` means a snapshot number" % args.label)
     sessions = [stored(s) for s in live_sessions()]
     if not sessions:
         if not args.quiet:
@@ -182,7 +188,7 @@ def cmd_save(args):
             print("No change since the last snapshot (%d sessions)." % len(sessions))
         return
     os.makedirs(SNAP_DIR, exist_ok=True)
-    label = re.sub(r"[^A-Za-z0-9_-]", "-", args.label) if args.label else ""
+    label = clean_label(args.label) if args.label else ""
     now = time.time()
     # Milliseconds and the pid keep two saves in the same second apart: the hook can
     # fire for several sessions at once while a restore is opening tabs.
@@ -240,15 +246,15 @@ def pick_snapshot(which):
     """
     good = good_snapshots()
     if which:
-        if os.path.exists(which):
-            if load_snapshot(which) is None:
-                die("not a readable snapshot: %s" % which)
+        if os.path.isfile(which) and load_snapshot(which) is not None:
             return which
         if which.isdigit() and 1 <= int(which) <= len(good):
             return good[-int(which)][0]
-        labelled = [path for path, snap in good if snap.get("label") == which]
+        labelled = [path for path, snap in good if snap.get("label") and snap["label"] == clean_label(which)]
         if labelled:
             return labelled[-1]
+        if os.path.exists(which):
+            die("not a readable snapshot: %s" % which)
         die("no such snapshot: %s (see: ccs snapshots)" % which)
     if not good:
         die("no snapshots yet. Run: ccs save")
