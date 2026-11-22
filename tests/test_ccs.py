@@ -171,6 +171,14 @@ class CcsTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.ccs.cmd_snapshots(None)  # must not raise
 
+    def test_a_snapshot_can_be_picked_by_its_label(self):
+        os.makedirs(self.ccs.SNAP_DIR, exist_ok=True)
+        for name, taken, label in [("a", 2000, "before"), ("b", 3000, "before"), ("c", 4000, "")]:
+            with open(os.path.join(self.ccs.SNAP_DIR, name + ".json"), "w") as f:
+                json.dump({"taken": taken, "label": label, "sessions": []}, f)
+        self.assertTrue(self.ccs.pick_snapshot("before").endswith("b.json"))
+        self.assertTrue(self.ccs.pick_snapshot(None).endswith("c.json"))
+
     # --- restore
 
     def test_restore_skips_running_sessions_missing_folders_and_backslashes(self):

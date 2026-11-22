@@ -231,7 +231,8 @@ def cmd_snapshots(args):
 
 
 def pick_snapshot(which):
-    """`which` is a number from `ccs snapshots` (1 is newest) or a file path.
+    """`which` is a number from `ccs snapshots` (1 is newest), a label (the newest
+    snapshot saved with it) or a file path.
 
     With nothing given: the newest snapshot from before the last restart, because
     snapshots taken afterwards only hold whatever has been reopened so far. If this
@@ -245,6 +246,9 @@ def pick_snapshot(which):
             return which
         if which.isdigit() and 1 <= int(which) <= len(good):
             return good[-int(which)][0]
+        labelled = [path for path, snap in good if snap.get("label") == which]
+        if labelled:
+            return labelled[-1]
         die("no such snapshot: %s (see: ccs snapshots)" % which)
     if not good:
         die("no snapshots yet. Run: ccs save")
@@ -505,7 +509,7 @@ def main():
     p.set_defaults(fn=cmd_save)
 
     p = sub.add_parser("restore", help="reopen the sessions from a snapshot")
-    p.add_argument("snapshot", nargs="?", help="a number from `ccs snapshots` or a file; default: newest before the last restart")
+    p.add_argument("snapshot", nargs="?", help="a number from `ccs snapshots`, a label or a file; default: newest before the last restart")
     p.add_argument("--dry-run", action="store_true", help="show what would be opened")
     p.add_argument("--only", help="only sessions whose name or folder contains this")
     p.add_argument("--terminal", choices=["auto", "iterm", "ptyxis", "print"], default="auto")
