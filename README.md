@@ -87,7 +87,7 @@ tmux/                # tmux config with catppuccin v2
 nvim/                # AstroNvim v6 (language packs, catppuccin, pinned lockfile)
 bat/  lazygit/  tealdeer/   # per-tool configs
 themes/              # vendored catppuccin themes (bat, delta, btop, eza, iterm)
-bin/                 # gifenc (ffmpeg gif encoder), super-sync (rsync watch)
+bin/                 # gifenc (ffmpeg gif encoder), super-sync (rsync watch), ccs (Claude Code sessions)
 ```
 
 ## Local files (never committed)
@@ -106,9 +106,30 @@ Ctrl+R        # fuzzy history search (atuin)
 Ctrl+T        # fuzzy file picker (fzf)
 ll / la / lt  # eza listings (long / all / tree)
 lg            # lazygit
-osup          # update everything (brew, plus App Store/OS on macOS, apt on Linux)
+osup          # update everything (brew, plus App Store/OS on macOS, apt on Linux); snapshots Claude Code sessions first
 mise use -g node@lts  # runtime versions (replaces nvm/pyenv/rbenv)
 ```
+
+## Claude Code sessions
+
+A restart kills every running Claude Code session, and each then has to be reopened by hand from the right folder. `ccs` saves which sessions were running and reopens them.
+
+```bash
+ccs save        # snapshot every running session (folder, name, session ID)
+ccs restore     # reopen them, one terminal tab each (iTerm2 on macOS, Ptyxis on Linux)
+ccs snapshots   # list snapshots; `ccs restore 3` uses the third newest
+ccs list        # running sessions, and whether their names fit the pattern
+ccs new         # start a session in this folder, named <folder>_<machine>
+ccs review      # start a reviewer in ../<repo>-wt-review, named <repo>_<machine>_rev
+```
+
+- `osup` runs `ccs save` first, so after an update: log in, open a terminal, run `ccs restore`.
+- `ccs restore` uses the newest snapshot from before the last restart and skips sessions that are already running, so it is safe to run twice. `ccs restore --dry-run` shows what it would open.
+- Session names need a short name for the machine in `~/.claude/machine-tag` (for example `home`).
+- Snapshots live in `~/.local/state/claude-sessions/` and never leave the machine. They hold session names and folder paths.
+- To keep snapshots current without thinking about it, call `ccs save --quiet` from a Claude Code `SessionStart` hook.
+
+Tests: `python3 tests/test_ccs.py`.
 
 ## Theming
 

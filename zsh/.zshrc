@@ -110,9 +110,10 @@ command -v lazygit >/dev/null && alias lg="lazygit"
 
 # Update everything: Homebrew, plus App Store apps and the OS itself on macOS
 if [[ "$OSTYPE" == darwin* ]]; then
-  alias osup="brew update && brew upgrade && brew cleanup && mas upgrade && sudo softwareupdate -i -a --restart"
+  # Snapshot Claude Code sessions first, so `ccs restore` can reopen them after the restart
+  alias osup="command -v ccs >/dev/null && ccs save --label pre-update; brew update && brew upgrade && brew cleanup && mas upgrade && sudo softwareupdate -i -a --restart"
 else
-  alias osup="brew update && brew upgrade && brew cleanup && sudo apt-get update && sudo apt-get upgrade -y"
+  alias osup="command -v ccs >/dev/null && ccs save --label pre-update; brew update && brew upgrade && brew cleanup && sudo apt-get update && sudo apt-get upgrade -y"
 fi
 
 # ========================================
