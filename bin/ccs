@@ -354,11 +354,12 @@ def plan_restore(sessions, running, only=None):
 
 
 def fits_pattern(name, cwd):
-    """Whether `name` is already a pattern name for this folder: any number, and _rev or
-    not, since `ccs new --rev` names a reviewer in an ordinary folder."""
+    """Whether `name` is already a pattern name for this folder, with any number. _rev is
+    optional in an ordinary folder, since `ccs new --rev` names a reviewer there, and
+    required in a review worktree."""
     want = expected_name(cwd)
-    base = want[: -len("_rev")] if want.endswith("_rev") else want
-    return bool(re.fullmatch(re.escape(base) + r"(_\d+)?(_rev)?", name or ""))
+    base, rev = (want[: -len("_rev")], "_rev") if want.endswith("_rev") else (want, "(_rev)?")
+    return bool(re.fullmatch(re.escape(base) + r"(_\d+)?" + rev, name or ""))
 
 
 def plan_renames(todo, taken):

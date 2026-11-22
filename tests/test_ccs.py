@@ -229,10 +229,12 @@ class CcsTest(unittest.TestCase):
             {"name": "project_desk_rev", "sessionId": "2", "cwd": "/w/project"},
             {"name": "other_desk_rev", "sessionId": "3", "cwd": "/w/project"},
             {"name": "thing_desk", "sessionId": "4", "cwd": "/w/thing"},
+            {"name": "more_desk", "sessionId": "5", "cwd": "/w/more-wt-review"},
+            {"name": "more_desk", "sessionId": "6", "cwd": "/w/more"},
         ]
         self.ccs.plan_renames(sessions, {"thing_desk"})  # a running session holds that name
         self.assertEqual(
-            [s["rename"] for s in sessions], ["project_desk", "project_desk_rev", "project_desk_2_rev", "thing_desk_2"]
+            [s["rename"] for s in sessions], ["project_desk", "project_desk_rev", "project_desk_2_rev", "thing_desk_2", "more_desk_rev", "more_desk"],
         )
 
 
