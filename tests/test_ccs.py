@@ -119,6 +119,13 @@ class CcsTest(unittest.TestCase):
         self.assertTrue(self.ccs.pick_snapshot(None).endswith("c.json"))
         self.assertTrue(self.ccs.pick_snapshot("3").endswith("a.json"))
 
+    def test_snapshots_are_ordered_by_time_taken_not_by_file_name(self):
+        self.snapshot("z-named-last-but-older", 100)
+        self.snapshot("a-named-first-but-newer", 200)
+        self.ccs.boot_time = lambda: 50
+        self.assertTrue(self.ccs.pick_snapshot(None).endswith("a-named-first-but-newer.json"))
+        self.assertTrue(self.ccs.pick_snapshot("2").endswith("z-named-last-but-older.json"))
+
     def test_an_unreadable_snapshot_is_skipped(self):
         self.snapshot("a", 100)
         with open(os.path.join(self.ccs.SNAP_DIR, "b.json"), "w") as f:

@@ -53,7 +53,7 @@ def alive(pid):
     except ProcessLookupError:
         return False
     except PermissionError:
-        return True
+        return False  # another user's process; every session of ours runs as us
     return True
 
 
@@ -140,12 +140,17 @@ def load_snapshot(path):
 
 
 def good_snapshots():
-    """[(path, snapshot)] oldest first, leaving out unreadable files."""
+    """[(path, snapshot)] oldest first, leaving out unreadable files.
+
+    Ordered by when each was taken, not by file name: the clock can go back (a
+    laptop flown west, the end of daylight saving), and names must not decide.
+    """
     out = []
     for path in snapshot_files():
         snap = load_snapshot(path)
         if snap is not None:
             out.append((path, snap))
+    out.sort(key=lambda item: item[1]["taken"])
     return out
 
 
@@ -182,7 +187,7 @@ def cmd_save(args):
     # Milliseconds and the pid keep two saves in the same second apart: the hook can
     # fire for several sessions at once while a restore is opening tabs.
     name = "%s-%03d-%d%s.json" % (
-        time.strftime("%Y%m%d-%H%M%S", time.localtime(now)),
+        time.strftime("%Y%m%d-%H%M%S", time.gmtime(now)),
         int(now * 1000) % 1000,
         os.getpid(),
         "-" + label if label else "",
@@ -197,7 +202,7 @@ def cmd_save(args):
         )
         f.write("\n")
     os.replace(tmp, path)
-    for old in snapshot_files()[:-KEEP]:
+    for old, _ in good_snapshots()[:-KEEP]:
         try:
             os.remove(old)
         except OSError:
