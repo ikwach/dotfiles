@@ -516,11 +516,27 @@ elif command -v dscl >/dev/null 2>&1; then
   LOGIN_SHELL="$(dscl . -read "/Users/$(id -un)" UserShell 2>/dev/null | awk '{print $2}')" || LOGIN_SHELL=""
 fi
 LOGIN_SHELL="${LOGIN_SHELL:-$SHELL}"
+
+# chsh refuses any shell /etc/shells does not list. On Linux, Homebrew's zsh
+# (a dependency of antidote) comes first on PATH but is not listed, while apt's
+# /usr/bin/zsh is -- so `chsh -s "$(command -v zsh)"` fails. Take the first zsh
+# on PATH that /etc/shells lists, which also keeps the login shell off a brew
+# path that upgrades and cleanups can pull out from under it.
+LOGIN_ZSH=""
+while IFS= read -r candidate; do
+  if grep -qxF "$candidate" /etc/shells 2>/dev/null; then
+    LOGIN_ZSH="$candidate"
+    break
+  fi
+done < <(type -ap zsh)
+
 if [[ "$LOGIN_SHELL" == *zsh ]]; then
   success "Login shell already zsh"
+elif [[ -n "$LOGIN_ZSH" ]]; then
+  info "Setting $LOGIN_ZSH as default shell (currently $LOGIN_SHELL)..."
+  chsh -s "$LOGIN_ZSH" || warning "Could not change the default shell; run: chsh -s $LOGIN_ZSH"
 elif command -v zsh >/dev/null 2>&1; then
-  info "Setting zsh as default shell (currently $LOGIN_SHELL)..."
-  chsh -s "$(command -v zsh)" || warning "Could not change the default shell; run chsh manually"
+  warning "$(command -v zsh) is not in /etc/shells, so chsh will refuse it; run: command -v zsh | sudo tee -a /etc/shells && chsh -s \"\$(command -v zsh)\""
 else
   warning "zsh is not installed; login shell left as $LOGIN_SHELL"
 fi
