@@ -59,9 +59,8 @@ def alive(pid):
 
 
 def ps_info(pids):
-    """{pid: (tty, start)} for the given processes, from one ps call, or None if ps
-    could not be run. `start` is ps's lstart in UTC, the form Claude Code stores as
-    procStart."""
+    """{pid: (tty, start)} for the given processes, from one ps call; empty if ps could
+    not be run. `start` is ps's lstart in UTC, the form Claude Code stores as procStart."""
     if not pids:
         return {}
     try:
@@ -72,13 +71,27 @@ def ps_info(pids):
             env=dict(os.environ, LC_ALL="C", TZ="UTC"),
         ).stdout
     except OSError:
-        return None
+        return {}
     info = {}
     for line in out.splitlines():
         parts = line.split()
         if len(parts) >= 7 and parts[0].isdigit():
             info[int(parts[0])] = (parts[1], " ".join(parts[2:7]))
     return info
+
+
+# How far a process start may move and still be the same process. On Linux, ps works
+# lstart out from the boot time, which the kernel derives from the wall clock, so a
+# clock step (the first NTP sync, a resume, a manual change) moves the lstart of every
+# running process by the size of the step. A reused pid starts minutes or days away.
+START_SLACK = 10
+
+
+def lstart_epoch(text):
+    try:
+        return calendar.timegm(time.strptime(" ".join(text.split()), "%a %b %d %H:%M:%S %Y"))
+    except ValueError:
+        return None
 
 
 def same_process(record, path, start):
@@ -90,12 +103,14 @@ def same_process(record, path, start):
     Files without it come from older versions: their process must have started no
     later than the file says the session did.
     """
+    began = lstart_epoch(start)
     recorded = record.get("procStart")
     if isinstance(recorded, str) and recorded.strip():
-        return " ".join(recorded.split()) == start
-    try:
-        began = calendar.timegm(time.strptime(start, "%a %b %d %H:%M:%S %Y"))
-    except ValueError:
+        then = lstart_epoch(recorded)
+        if began is None or then is None:
+            return " ".join(recorded.split()) == " ".join(start.split())
+        return abs(began - then) <= START_SLACK
+    if began is None:
         return True  # cannot tell; the restart check in live_sessions still applies
     started = record.get("startedAt")
     if isinstance(started, (int, float)) and not isinstance(started, bool):
@@ -105,7 +120,7 @@ def same_process(record, path, start):
             written = os.path.getmtime(path)
         except OSError:
             return False
-    return began <= written + 2  # lstart has whole seconds
+    return began <= written + START_SLACK
 
 
 def tty_key(tty):
@@ -134,12 +149,14 @@ def live_sessions():
     info = ps_info([d["pid"] for d, _ in records])
     found = []
     for d, path in records:
-        tty = ""
-        if info is not None:
-            proc = info.get(d["pid"])
-            if proc is None or not same_process(d, path, proc[1]):
-                continue  # gone since, or its pid now belongs to another process
-            tty = proc[0]
+        proc = info.get(d["pid"])
+        if proc is not None and not same_process(d, path, proc[1]):
+            continue  # its pid now belongs to another process
+        if proc is None and not alive(d["pid"]):
+            continue  # gone since
+        # A live pid that ps could not report on (ps missing, failing, or printing
+        # nothing readable) is kept: dropping a live session makes restore open a copy.
+        tty = proc[0] if proc else ""
         found.append(
             {
                 "name": d.get("name", ""),

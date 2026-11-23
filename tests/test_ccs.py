@@ -149,6 +149,31 @@ class CcsTest(unittest.TestCase):
         self.save()
         self.assertEqual(self.saved_ids(), [["live"]])
 
+    def test_a_clock_step_of_a_few_seconds_does_not_lose_a_session(self):
+        # On Linux a clock step moves the lstart of processes already running.
+        began = self.ccs.lstart_epoch(self.my_start())
+        lstart = lambda t: time.strftime("%a %b %d %H:%M:%S %Y", time.gmtime(t))
+        self.session(os.getpid(), "stepped", proc_start=lstart(began + 5))
+        self.save()
+        self.assertEqual(self.saved_ids(), [["stepped"]])
+        self.session(os.getpid(), "reused", proc_start=lstart(began + 60))
+        self.save()
+        self.assertEqual(self.saved_ids(), [["stepped"]])
+
+    def test_a_missing_or_failing_ps_keeps_live_sessions_and_still_drops_dead_ones(self):
+        bin_dir = os.path.join(self.tmp.name, "bin")
+        os.mkdir(bin_dir)
+        failing = os.path.join(self.tmp.name, "failing")
+        os.mkdir(failing)
+        with open(os.path.join(failing, "ps"), "w") as f:
+            f.write("#!/bin/sh\necho 'ps: illegal option' >&2\nexit 1\n")
+        os.chmod(os.path.join(failing, "ps"), 0o755)
+        self.session(os.getpid(), "live", proc_start=self.my_start())
+        self.session(999999, "dead")
+        for path in (bin_dir, failing):  # no ps at all, then a ps that prints nothing
+            with mock.patch.dict(os.environ, {"PATH": path}):
+                self.assertEqual([s["sessionId"] for s in self.ccs.live_sessions()], ["live"])
+
     def test_unchanged_sessions_are_saved_once_but_a_label_always_saves(self):
         self.session(os.getpid(), "live")
         self.save()
