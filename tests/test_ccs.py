@@ -42,7 +42,7 @@ class CcsTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def session(self, pid, sid, cwd=None, name="n", kind="interactive", started=None):
+    def session(self, pid, sid, cwd=None, name="n", kind="interactive", started=None, proc_start=None):
         record = {
             "pid": pid,
             "sessionId": sid,
@@ -51,8 +51,18 @@ class CcsTest(unittest.TestCase):
             "kind": kind,
             "startedAt": int(time.time() * 1000) if started is None else started,
         }
-        with open(os.path.join(self.claude, "sessions", "%d.json" % pid), "w") as f:
+        if started is False:
+            del record["startedAt"]
+        if proc_start is not None:
+            record["procStart"] = proc_start
+        path = os.path.join(self.claude, "sessions", "%d.json" % pid)
+        with open(path, "w") as f:
             json.dump(record, f)
+        return path
+
+    def my_start(self):
+        """This process's start time as Claude Code would record it."""
+        return self.ccs.ps_info([os.getpid()])[os.getpid()][1]
 
     def save(self, label=None):
         self.ccs.cmd_save(types.SimpleNamespace(label=label, quiet=True))
@@ -116,6 +126,58 @@ class CcsTest(unittest.TestCase):
         self.session(os.getpid(), "leftover", started=1_000_000 * 1000)
         self.save()
         self.assertEqual(self.saved_ids(), [])
+
+    def test_a_reused_pid_is_told_apart_by_the_recorded_process_start(self):
+        # After a restart, apps opening at login take the pids of the killed sessions.
+        self.session(os.getpid(), "leftover", proc_start="Sun Nov 22 21:01:07 2026")
+        self.save()
+        self.assertEqual(self.saved_ids(), [])
+        self.session(os.getpid(), "live", proc_start="  ".join(self.my_start().split(" ", 1)))
+        self.save()
+        self.assertEqual(self.saved_ids(), [["live"]])
+
+    def test_without_procstart_a_process_younger_than_the_session_file_is_not_it(self):
+        began = self.ccs.calendar.timegm(time.strptime(self.my_start(), "%a %b %d %H:%M:%S %Y"))
+        self.session(os.getpid(), "leftover", started=(began - 3600) * 1000)
+        self.save()
+        self.assertEqual(self.saved_ids(), [])
+        path = self.session(os.getpid(), "leftover", started=False)
+        os.utime(path, (began - 3600, began - 3600))
+        self.save()
+        self.assertEqual(self.saved_ids(), [])
+        self.session(os.getpid(), "live", started=False)
+        self.save()
+        self.assertEqual(self.saved_ids(), [["live"]])
+
+    def test_a_clock_step_of_a_few_seconds_does_not_lose_a_session(self):
+        # On Linux a clock step moves the lstart of processes already running.
+        began = self.ccs.lstart_epoch(self.my_start())
+        lstart = lambda t: time.strftime("%a %b %d %H:%M:%S %Y", time.gmtime(t))
+        self.session(os.getpid(), "stepped", proc_start=lstart(began + 5))
+        self.save()
+        self.assertEqual(self.saved_ids(), [["stepped"]])
+        self.session(os.getpid(), "reused", proc_start=lstart(began + 60))
+        self.save()
+        self.assertEqual(self.saved_ids(), [["stepped"]])
+
+    def test_a_missing_or_failing_ps_keeps_live_sessions_and_still_drops_dead_ones(self):
+        bin_dir = os.path.join(self.tmp.name, "bin")
+        os.mkdir(bin_dir)
+        failing = os.path.join(self.tmp.name, "failing")
+        os.mkdir(failing)
+        with open(os.path.join(failing, "ps"), "w") as f:
+            f.write("#!/bin/sh\necho 'ps: illegal option' >&2\nexit 1\n")
+        os.chmod(os.path.join(failing, "ps"), 0o755)
+        self.session(os.getpid(), "live", proc_start=self.my_start())
+        self.session(999999, "dead")
+        for path in (bin_dir, failing):  # no ps at all, then a ps that prints nothing
+            with mock.patch.dict(os.environ, {"PATH": path}):
+                self.assertEqual([s["sessionId"] for s in self.ccs.live_sessions()], ["live"])
+
+    def test_a_session_that_ends_before_ps_runs_is_dropped(self):
+        self.session(999999, "ended")
+        with mock.patch.object(self.ccs, "alive", side_effect=[True, False]):
+            self.assertEqual(self.ccs.live_sessions(), [])
 
     def test_unchanged_sessions_are_saved_once_but_a_label_always_saves(self):
         self.session(os.getpid(), "live")
