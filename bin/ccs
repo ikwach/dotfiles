@@ -69,8 +69,9 @@ def ps_info(pids):
             capture_output=True,
             text=True,
             env=dict(os.environ, LC_ALL="C", TZ="UTC"),
+            timeout=5,
         ).stdout
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
         return {}
     info = {}
     for line in out.splitlines():

@@ -174,6 +174,11 @@ class CcsTest(unittest.TestCase):
             with mock.patch.dict(os.environ, {"PATH": path}):
                 self.assertEqual([s["sessionId"] for s in self.ccs.live_sessions()], ["live"])
 
+    def test_a_session_that_ends_before_ps_runs_is_dropped(self):
+        self.session(999999, "ended")
+        with mock.patch.object(self.ccs, "alive", side_effect=[True, False]):
+            self.assertEqual(self.ccs.live_sessions(), [])
+
     def test_unchanged_sessions_are_saved_once_but_a_label_always_saves(self):
         self.session(os.getpid(), "live")
         self.save()
