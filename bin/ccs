@@ -18,6 +18,7 @@ macOS and Ptyxis on Linux; anywhere else the commands are printed.
 Snapshots contain session names and folder paths. They stay on this machine.
 """
 import argparse
+import calendar
 import glob
 import json
 import os
@@ -57,24 +58,54 @@ def alive(pid):
     return True
 
 
-def ps_ttys(pids):
-    """{pid: tty} for the given processes, from one ps call."""
+def ps_info(pids):
+    """{pid: (tty, start)} for the given processes, from one ps call, or None if ps
+    could not be run. `start` is ps's lstart in UTC, the form Claude Code stores as
+    procStart."""
     if not pids:
         return {}
     try:
         out = subprocess.run(
-            ["ps", "-o", "pid=,tty=", "-p", ",".join(str(p) for p in pids)],
+            ["ps", "-o", "pid=,tty=,lstart=", "-p", ",".join(str(p) for p in pids)],
             capture_output=True,
             text=True,
+            env=dict(os.environ, LC_ALL="C", TZ="UTC"),
         ).stdout
     except OSError:
-        return {}
+        return None
     info = {}
     for line in out.splitlines():
         parts = line.split()
-        if len(parts) >= 2 and parts[0].isdigit():
-            info[int(parts[0])] = parts[1]
+        if len(parts) >= 7 and parts[0].isdigit():
+            info[int(parts[0])] = (parts[1], " ".join(parts[2:7]))
     return info
+
+
+def same_process(record, path, start):
+    """Whether the process holding the record's pid now is the one that wrote the record.
+
+    A restart leaves the files of killed sessions behind, and the apps that open at
+    login soon take their pids, so a live pid proves nothing. Claude Code records the
+    process start time as procStart; a different one means the pid has been reused.
+    Files without it come from older versions: their process must have started no
+    later than the file says the session did.
+    """
+    recorded = record.get("procStart")
+    if isinstance(recorded, str) and recorded.strip():
+        return " ".join(recorded.split()) == start
+    try:
+        began = calendar.timegm(time.strptime(start, "%a %b %d %H:%M:%S %Y"))
+    except ValueError:
+        return True  # cannot tell; the restart check in live_sessions still applies
+    started = record.get("startedAt")
+    if isinstance(started, (int, float)) and not isinstance(started, bool):
+        written = started / 1000
+    else:
+        try:
+            written = os.path.getmtime(path)
+        except OSError:
+            return False
+    return began <= written + 2  # lstart has whole seconds
 
 
 def tty_key(tty):
@@ -99,11 +130,16 @@ def live_sessions():
         started = d.get("startedAt")
         if boot and isinstance(started, (int, float)) and started < boot * 1000:
             continue  # left over from before the restart; the pid now belongs to something else
-        records.append(d)
-    info = ps_ttys([d["pid"] for d in records])
+        records.append((d, path))
+    info = ps_info([d["pid"] for d, _ in records])
     found = []
-    for d in records:
-        tty = info.get(d["pid"], "")
+    for d, path in records:
+        tty = ""
+        if info is not None:
+            proc = info.get(d["pid"])
+            if proc is None or not same_process(d, path, proc[1]):
+                continue  # gone since, or its pid now belongs to another process
+            tty = proc[0]
         found.append(
             {
                 "name": d.get("name", ""),
